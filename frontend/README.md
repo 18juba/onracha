@@ -28,7 +28,7 @@ Abra <http://localhost:5173>.
 ```bash
 bun run check
 bun run lint
-bun run test:unit -- --run
+bun run test:unit --run
 ```
 
 `check` executa a verificação de tipos e diagnósticos do Svelte; `lint` verifica formatação e ESLint; `test:unit -- --run` executa os testes unitários do Vitest uma vez; `bun run test:unit` inicia o Vitest em modo interativo. No scaffold inicial, o teste de exemplo está em `src/lib/vitest-examples/greet.spec.ts`.
