@@ -61,7 +61,6 @@ Para mudanças em Svelte ou SvelteKit, siga também as instruções de `frontend
 
 ## Executar a aplicação
 
-Na raiz do repositório, `docker compose up` inicia frontend e backend para desenvolvimento. Os passos para executar cada serviço individualmente estão nos READMEs de `backend/` e `frontend/`.
 
 ## Mensagens de commit
 

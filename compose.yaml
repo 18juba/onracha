@@ -1,6 +1,23 @@
 name: onracha
 
 services:
+  db:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-onracha}
+      POSTGRES_USER: ${POSTGRES_USER:-onracha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onracha}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   backend:
     image: golang:1.27.3-alpine
     working_dir: /app
@@ -22,3 +39,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  postgres_data:
