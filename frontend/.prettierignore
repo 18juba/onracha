@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# GitHub agent and skill reference documentation
+/.github/
