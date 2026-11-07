@@ -1,56 +1,41 @@
-# sv
+# Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Construído com SvelteKit, Svelte 5 e TypeScript. O projeto usa Bun como gerenciador de pacotes.
 
-## Creating a project
+## Requisitos
 
-If you're seeing this, you've probably already done this step. Congrats!
+- Bun 1.4.4, a mesma versão usada no Docker Compose.
 
-```sh
-# create a new project
-npx sv create my-app
+## Instalar dependências
+
+A partir da raiz do repositório:
+
+```bash
+cd frontend
+bun install --frozen-lockfile
 ```
 
-To recreate this project with the same configuration:
+## Executar em desenvolvimento
 
-```sh
-# recreate this project
-bun x sv@1.3.0 create --template minimal --types ts --add prettier vitest="usages:unit" eslint tailwindcss="plugins:none" ai-tools="ide:vscode+tools:mcp,svelte-code-writer,svelte-core-bestpractices,svelte-file-editor+mcpSetup:local+optInSkills:none" --install bun frontend
+```bash
+bun run dev
 ```
 
-## Adding features
+Abra <http://localhost:5173>.
 
-Add features to your project with `sv add`:
+## Verificações e testes
 
-```sh
-npx sv add
+```bash
+bun run check
+bun run lint
+bun run test:unit -- --run
 ```
 
-For example, to add Tailwind CSS:
+`check` executa a verificação de tipos e diagnósticos do Svelte; `lint` verifica formatação e ESLint; `test:unit -- --run` executa os testes unitários do Vitest uma vez; `bun run test:unit` inicia o Vitest em modo interativo. No scaffold inicial, o teste de exemplo está em `src/lib/vitest-examples/greet.spec.ts`.
 
-```sh
-npx sv add tailwindcss
+## Build de produção e preview local
+
+```bash
+bun run build
+bun run preview
 ```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
