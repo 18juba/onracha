@@ -86,7 +86,7 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 		t.Fatalf("create second owner's arena: %v", err)
 	}
 
-	api := NewRouter(authService, arenaService, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{})
+	api := NewRouter(authService, arenaService, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{})
 	unauthenticatedRequest := httptest.NewRequest(http.MethodGet, "/api/v1/arenas", nil)
 	unauthenticatedResponse := httptest.NewRecorder()
 	api.ServeHTTP(unauthenticatedResponse, unauthenticatedRequest)

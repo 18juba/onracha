@@ -50,7 +50,7 @@ func TestOpenAPISpecIsServedAtOpenAPIRoute(t *testing.T) {
 }
 
 func TestOpenAPIRouteReturnsInternalErrorWhenSpecIsMissing(t *testing.T) {
-	router := NewRouter(nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{
+	router := NewRouter(nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{
 		OpenAPISpecPath: filepath.Join(t.TempDir(), "missing-openapi.yaml"),
 	})
 	request := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
@@ -71,5 +71,5 @@ func newSwaggerTestRouter(t *testing.T) http.Handler {
 		t.Fatalf("write test OpenAPI document: %v", err)
 	}
 
-	return NewRouter(nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{OpenAPISpecPath: specPath})
+	return NewRouter(nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{OpenAPISpecPath: specPath})
 }

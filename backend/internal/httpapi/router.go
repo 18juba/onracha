@@ -13,6 +13,7 @@ import (
 
 	"onracha/internal/arena"
 	"onracha/internal/auth"
+	"onracha/internal/game"
 )
 
 const sessionCookieName = "onracha_session"
@@ -33,6 +34,15 @@ type ArenaService interface {
 	ToggleActive(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
 }
 
+// GameService describes arena availability and game participation operations.
+type GameService interface {
+	CreateTimeSlot(ctx context.Context, arenaID, ownerUserID int64, startsAt, endsAt time.Time) (game.TimeSlot, error)
+	ListAvailableTimeSlots(ctx context.Context, arenaID int64) ([]game.TimeSlot, error)
+	Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (game.Game, error)
+	ListByArena(ctx context.Context, arenaID int64) ([]game.Game, error)
+	Join(ctx context.Context, gameID, userID int64) (game.Game, error)
+}
+
 // Config contains browser-facing HTTP settings for the API.
 type Config struct {
 	AllowedOrigin   string
@@ -43,12 +53,13 @@ type Config struct {
 type handler struct {
 	authService  AuthService
 	arenaService ArenaService
+	gameService  GameService
 	logger       *slog.Logger
 	config       Config
 }
 
 // NewRouter builds the API routes and request logging middleware.
-func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.Logger, config Config) http.Handler {
+func NewRouter(authService AuthService, arenaService ArenaService, gameService GameService, logger *slog.Logger, config Config) http.Handler {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
@@ -57,7 +68,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.
 		config.OpenAPISpecPath = "../docs/openapi.yaml"
 	}
 
-	api := &handler{authService: authService, arenaService: arenaService, logger: logger, config: config}
+	api := &handler{authService: authService, arenaService: arenaService, gameService: gameService, logger: logger, config: config}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", api.health)
 	mux.HandleFunc("GET /openapi.yaml", api.openAPISpec)
@@ -71,6 +82,11 @@ func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.
 	mux.HandleFunc("PUT /api/v1/arenas/{id}", api.updateArena)
 	mux.HandleFunc("PATCH /api/v1/arenas/{id}/active", api.toggleArenaActive)
 	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
+	mux.HandleFunc("POST /api/v1/arenas/{id}/time-slots", api.createTimeSlot)
+	mux.HandleFunc("GET /api/v1/arenas/{id}/time-slots", api.listAvailableTimeSlots)
+	mux.HandleFunc("GET /api/v1/arenas/{id}/games", api.listGamesByArena)
+	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
+	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
 
 	return api.cors(api.requestLogger(mux))
 }
@@ -301,12 +317,142 @@ func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, createdArena)
 }
 
+func (h *handler) createTimeSlot(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	var request struct {
+		StartsAt time.Time `json:"starts_at"`
+		EndsAt   time.Time `json:"ends_at"`
+	}
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+
+	created, err := h.gameService.CreateTimeSlot(r.Context(), arenaID, user.ID, request.StartsAt, request.EndsAt)
+	if err != nil {
+		h.writeGameError(w, err, "arena time slot creation failed", "Não foi possível registrar o horário.")
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (h *handler) listAvailableTimeSlots(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+
+	arenaID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	values, err := h.gameService.ListAvailableTimeSlots(r.Context(), arenaID)
+	if err != nil {
+		h.logger.Error("available time slot listing failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível consultar os horários.")
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
+}
+
+func (h *handler) scheduleGame(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	timeSlotID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_time_slot_id", "O identificador do horário é inválido.")
+		return
+	}
+
+	created, err := h.gameService.Schedule(r.Context(), timeSlotID, user.ID)
+	if err != nil {
+		h.writeGameError(w, err, "game scheduling failed", "Não foi possível agendar o jogo.")
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (h *handler) listGamesByArena(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+
+	arenaID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	values, err := h.gameService.ListByArena(r.Context(), arenaID)
+	if err != nil {
+		h.logger.Error("game listing failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível consultar os jogos.")
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
+}
+
+func (h *handler) joinGame(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	gameID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+		return
+	}
+
+	updated, err := h.gameService.Join(r.Context(), gameID, user.ID)
+	if err != nil {
+		h.writeGameError(w, err, "game participation failed", "Não foi possível confirmar sua presença.")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (h *handler) writeGameError(w http.ResponseWriter, err error, logMessage, internalMessage string) {
+	switch {
+	case errors.Is(err, game.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", "Jogo ou horário não encontrado.")
+	case errors.Is(err, game.ErrInvalidArenaID), errors.Is(err, game.ErrInvalidTimeSlotID),
+		errors.Is(err, game.ErrInvalidGameID), errors.Is(err, game.ErrInvalidUserID),
+		errors.Is(err, game.ErrInvalidTimeRange), errors.Is(err, game.ErrTimeSlotInPast):
+		writeError(w, http.StatusBadRequest, "invalid_input", "Confira os dados e o horário informado.")
+	case errors.Is(err, game.ErrTimeSlotConflict), errors.Is(err, game.ErrTimeSlotUnavailable),
+		errors.Is(err, game.ErrUserTimeConflict), errors.Is(err, game.ErrAlreadyParticipating):
+		writeError(w, http.StatusConflict, "schedule_conflict", "Esse horário não está disponível para esta operação.")
+	default:
+		h.logger.Error(logMessage, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", internalMessage)
+	}
+}
+
 func parseArenaID(value string) (int64, error) {
-	arenaID, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || arenaID <= 0 {
+	arenaID, valid := parsePositiveID(value)
+	if !valid {
 		return 0, arena.ErrInvalidArenaID
 	}
 	return arenaID, nil
+}
+
+func parsePositiveID(value string) (int64, bool) {
+	id, err := strconv.ParseInt(value, 10, 64)
+	return id, err == nil && id > 0
 }
 
 func isInvalidArenaDetails(err error) bool {

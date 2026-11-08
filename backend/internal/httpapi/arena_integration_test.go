@@ -62,7 +62,7 @@ func TestAuthenticatedUserCanCreateArenaForTheirAccount(t *testing.T) {
 	}
 
 	arenaService := arena.NewService(postgres.NewArenaRepository(database))
-	api := NewRouter(authService, arenaService, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{})
+	api := NewRouter(authService, arenaService, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{})
 	requestBody := `{"name":"Arena Central","arena_type":"Society","address":"Rua do Esporte, 100","city":"São Paulo","state":"sp"}`
 
 	unauthenticatedRequest := httptest.NewRequest(http.MethodPost, "/api/v1/arenas", bytes.NewBufferString(requestBody))

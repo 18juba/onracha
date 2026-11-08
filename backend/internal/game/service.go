@@ -1,0 +1,100 @@
+package game
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// Service validates scheduling requests and delegates persistence operations.
+type Service struct {
+	timeSlots TimeSlotRepository
+	games     GameRepository
+}
+
+// NewService creates a game service with its persistence dependencies.
+func NewService(timeSlots TimeSlotRepository, games GameRepository) *Service {
+	return &Service{timeSlots: timeSlots, games: games}
+}
+
+// CreateTimeSlot registers a future arena interval on behalf of its owner.
+func (s *Service) CreateTimeSlot(ctx context.Context, arenaID, ownerUserID int64, startsAt, endsAt time.Time) (TimeSlot, error) {
+	if ownerUserID <= 0 {
+		return TimeSlot{}, ErrInvalidUserID
+	}
+
+	value, err := NewTimeSlot(arenaID, startsAt, endsAt)
+	if err != nil {
+		return TimeSlot{}, err
+	}
+
+	created, err := s.timeSlots.Create(ctx, ownerUserID, value)
+	if err != nil {
+		return TimeSlot{}, fmt.Errorf("create arena time slot: %w", err)
+	}
+	return created, nil
+}
+
+// ListAvailableTimeSlots returns unbooked future intervals for one arena.
+func (s *Service) ListAvailableTimeSlots(ctx context.Context, arenaID int64) ([]TimeSlot, error) {
+	if arenaID <= 0 {
+		return nil, ErrInvalidArenaID
+	}
+
+	values, err := s.timeSlots.ListAvailableByArena(ctx, arenaID)
+	if err != nil {
+		return nil, fmt.Errorf("list available arena time slots: %w", err)
+	}
+	if values == nil {
+		values = []TimeSlot{}
+	}
+	return values, nil
+}
+
+// Schedule creates a game and automatically registers its organizer as a participant.
+func (s *Service) Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (Game, error) {
+	if timeSlotID <= 0 {
+		return Game{}, ErrInvalidTimeSlotID
+	}
+	if organizerUserID <= 0 {
+		return Game{}, ErrInvalidUserID
+	}
+
+	created, err := s.games.Schedule(ctx, timeSlotID, organizerUserID)
+	if err != nil {
+		return Game{}, fmt.Errorf("schedule game: %w", err)
+	}
+	return created, nil
+}
+
+// ListByArena returns scheduled games and their participants for one arena.
+func (s *Service) ListByArena(ctx context.Context, arenaID int64) ([]Game, error) {
+	if arenaID <= 0 {
+		return nil, ErrInvalidArenaID
+	}
+
+	values, err := s.games.ListByArena(ctx, arenaID)
+	if err != nil {
+		return nil, fmt.Errorf("list games by arena: %w", err)
+	}
+	if values == nil {
+		values = []Game{}
+	}
+	return values, nil
+}
+
+// Join adds a user to a game unless the user already has an overlapping game.
+func (s *Service) Join(ctx context.Context, gameID, userID int64) (Game, error) {
+	if gameID <= 0 {
+		return Game{}, ErrInvalidGameID
+	}
+	if userID <= 0 {
+		return Game{}, ErrInvalidUserID
+	}
+
+	updated, err := s.games.Join(ctx, gameID, userID)
+	if err != nil {
+		return Game{}, fmt.Errorf("join game: %w", err)
+	}
+	return updated, nil
+}

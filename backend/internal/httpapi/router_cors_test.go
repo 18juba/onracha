@@ -8,7 +8,7 @@ import (
 )
 
 func TestCORSAllowsArenaUpdateMethods(t *testing.T) {
-	api := NewRouter(nil, nil, nil, Config{AllowedOrigin: "http://localhost:5173"})
+	api := NewRouter(nil, nil, nil, nil, Config{AllowedOrigin: "http://localhost:5173"})
 	for _, method := range []string{http.MethodPut, http.MethodPatch} {
 		path := "/api/v1/arenas/1"
 		if method == http.MethodPatch {

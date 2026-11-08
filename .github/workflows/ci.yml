@@ -70,11 +70,14 @@ jobs:
         run: |
           go test ./internal/auth/... -coverprofile=/tmp/auth-coverage.out
           go test ./internal/arena/... -coverprofile=/tmp/arena-coverage.out
+          go test ./internal/game/... -coverprofile=/tmp/game-coverage.out
           auth_coverage="$(go tool cover -func=/tmp/auth-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
           arena_coverage="$(go tool cover -func=/tmp/arena-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
+          game_coverage="$(go tool cover -func=/tmp/game-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
           echo "Auth domain coverage: ${auth_coverage}% (minimum: 80%)"
           echo "Arena domain coverage: ${arena_coverage}% (minimum: 80%)"
-          awk -v auth="$auth_coverage" -v arena="$arena_coverage" 'BEGIN { exit !(auth >= 80 && arena >= 80) }'
+          echo "Game domain coverage: ${game_coverage}% (minimum: 80%)"
+          awk -v auth="$auth_coverage" -v arena="$arena_coverage" -v game="$game_coverage" 'BEGIN { exit !(auth >= 80 && arena >= 80 && game >= 80) }'
 
       - name: Build
         run: go build ./...
