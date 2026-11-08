@@ -284,6 +284,123 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Substitui os dados editáveis de uma arena
+      operationId: updateArena
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, arena_type, address, city, state, active]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                arena_type:
+                  type: string
+                  minLength: 1
+                address:
+                  type: string
+                  minLength: 1
+                city:
+                  type: string
+                  minLength: 1
+                state:
+                  type: string
+                  minLength: 2
+                  maxLength: 2
+                  pattern: '^[A-Za-z]{2}$'
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Arena atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Arena'
+        '400':
+          description: Dados incompletos ou inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Arena inexistente ou pertencente a outra conta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/arenas/{id}/active:
+    patch:
+      summary: Alterna entre ativa e inativa a arena da conta autenticada
+      operationId: toggleArenaActive
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Estado de atividade alternado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Arena'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Arena inexistente ou pertencente a outra conta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     cookieAuth:
@@ -311,7 +428,7 @@ components:
           format: date-time
     Arena:
       type: object
-      required: [id, owner_user_id, name, arena_type, address, city, state, created_at]
+      required: [id, owner_user_id, name, arena_type, address, city, state, active, created_at]
       properties:
         id:
           type: integer
@@ -331,6 +448,9 @@ components:
           type: string
           minLength: 2
           maxLength: 2
+        active:
+          type: boolean
+          example: true
         created_at:
           type: string
           format: date-time

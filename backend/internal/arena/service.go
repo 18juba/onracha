@@ -60,3 +60,39 @@ func (s *Service) GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int6
 	}
 	return value, nil
 }
+
+// Update validates and replaces the editable fields of an arena owned by the user.
+func (s *Service) Update(ctx context.Context, arenaID, ownerUserID int64, details Details, active bool) (Arena, error) {
+	if arenaID <= 0 {
+		return Arena{}, ErrInvalidArenaID
+	}
+
+	value, err := NewArena(ownerUserID, details)
+	if err != nil {
+		return Arena{}, err
+	}
+	value.ID = arenaID
+	value.Active = active
+
+	updatedArena, err := s.repository.Update(ctx, value)
+	if err != nil {
+		return Arena{}, fmt.Errorf("update arena: %w", err)
+	}
+	return updatedArena, nil
+}
+
+// ToggleActive switches an owned arena between active and inactive.
+func (s *Service) ToggleActive(ctx context.Context, arenaID, ownerUserID int64) (Arena, error) {
+	if arenaID <= 0 {
+		return Arena{}, ErrInvalidArenaID
+	}
+	if ownerUserID <= 0 {
+		return Arena{}, ErrInvalidOwner
+	}
+
+	updatedArena, err := s.repository.ToggleActive(ctx, arenaID, ownerUserID)
+	if err != nil {
+		return Arena{}, fmt.Errorf("toggle arena active status: %w", err)
+	}
+	return updatedArena, nil
+}

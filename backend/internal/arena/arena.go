@@ -26,10 +26,11 @@ type Arena struct {
 	Address     string    `json:"address"`
 	City        string    `json:"city"`
 	State       string    `json:"state"`
+	Active      bool      `json:"active"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// Details contains the fields an owner provides when registering an arena.
+// Details contains the venue fields an owner provides when creating or updating an arena.
 type Details struct {
 	Name      string
 	ArenaType string
@@ -76,6 +77,7 @@ func NewArena(ownerUserID int64, details Details) (Arena, error) {
 		Address:     address,
 		City:        city,
 		State:       state,
+		Active:      true,
 	}, nil
 }
 

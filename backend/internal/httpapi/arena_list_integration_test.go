@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,9 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create first owner's arena: %v", err)
 	}
+	if !firstArena.Active {
+		t.Fatal("new arena is inactive, want active by default")
+	}
 	if _, err := arenaService.Create(ctx, secondOwner.ID, arena.Details{
 		Name: "Second Owner Arena", ArenaType: "futsal", Address: "Rua Dois, 20", City: "São Paulo", State: "SP",
 	}); err != nil {
@@ -129,7 +133,7 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	if err := json.Unmarshal(ownerDetailResponse.Body.Bytes(), &ownerArena); err != nil {
 		t.Fatalf("decode owner detail response: %v", err)
 	}
-	if ownerArena.ID != firstArena.ID || ownerArena.OwnerUserID != firstOwner.ID || ownerArena.Name != firstArena.Name || ownerArena.ArenaType != firstArena.ArenaType || ownerArena.Address != firstArena.Address || ownerArena.City != firstArena.City || ownerArena.State != firstArena.State || !ownerArena.CreatedAt.Equal(firstArena.CreatedAt) {
+	if ownerArena.ID != firstArena.ID || ownerArena.OwnerUserID != firstOwner.ID || ownerArena.Name != firstArena.Name || ownerArena.ArenaType != firstArena.ArenaType || ownerArena.Address != firstArena.Address || ownerArena.City != firstArena.City || ownerArena.State != firstArena.State || !ownerArena.Active || !ownerArena.CreatedAt.Equal(firstArena.CreatedAt) {
 		t.Errorf("owner detail = %+v, want full arena %+v", ownerArena, firstArena)
 	}
 
@@ -151,5 +155,83 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	api.ServeHTTP(otherOwnerResponse, otherOwnerRequest)
 	if otherOwnerResponse.Code != http.StatusNotFound {
 		t.Fatalf("other owner's detail status = %d, want %d", otherOwnerResponse.Code, http.StatusNotFound)
+	}
+
+	putPath := detailPath
+	putBody := `{"name":" Arena Updated ","arena_type":" Futsal ","address":" Av. Central, 200 ","city":" Campinas ","state":" sp ","active":false}`
+	unauthenticatedPutRequest := httptest.NewRequest(http.MethodPut, putPath, strings.NewReader(putBody))
+	unauthenticatedPutRequest.Header.Set("Content-Type", "application/json")
+	unauthenticatedPutResponse := httptest.NewRecorder()
+	api.ServeHTTP(unauthenticatedPutResponse, unauthenticatedPutRequest)
+	if unauthenticatedPutResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated update status = %d, want %d", unauthenticatedPutResponse.Code, http.StatusUnauthorized)
+	}
+
+	ownerPutRequest := httptest.NewRequest(http.MethodPut, putPath, strings.NewReader(putBody))
+	ownerPutRequest.Header.Set("Content-Type", "application/json")
+	ownerPutRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+	ownerPutResponse := httptest.NewRecorder()
+	api.ServeHTTP(ownerPutResponse, ownerPutRequest)
+	if ownerPutResponse.Code != http.StatusOK {
+		t.Fatalf("owner update status = %d, want %d; body: %s", ownerPutResponse.Code, http.StatusOK, ownerPutResponse.Body.String())
+	}
+
+	var updatedArena arena.Arena
+	if err := json.Unmarshal(ownerPutResponse.Body.Bytes(), &updatedArena); err != nil {
+		t.Fatalf("decode updated arena response: %v", err)
+	}
+	if updatedArena.ID != firstArena.ID || updatedArena.OwnerUserID != firstOwner.ID || updatedArena.Name != "Arena Updated" || updatedArena.ArenaType != "futsal" || updatedArena.Address != "Av. Central, 200" || updatedArena.City != "Campinas" || updatedArena.State != "SP" || updatedArena.Active || !updatedArena.CreatedAt.Equal(firstArena.CreatedAt) {
+		t.Errorf("updated arena = %+v, want normalized full update with active=false", updatedArena)
+	}
+
+	incompletePutRequest := httptest.NewRequest(http.MethodPut, putPath, strings.NewReader(`{"name":"Arena Updated"}`))
+	incompletePutRequest.Header.Set("Content-Type", "application/json")
+	incompletePutRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+	incompletePutResponse := httptest.NewRecorder()
+	api.ServeHTTP(incompletePutResponse, incompletePutRequest)
+	if incompletePutResponse.Code != http.StatusBadRequest {
+		t.Fatalf("incomplete update status = %d, want %d", incompletePutResponse.Code, http.StatusBadRequest)
+	}
+
+	unauthenticatedPatchRequest := httptest.NewRequest(http.MethodPatch, putPath+"/active", nil)
+	unauthenticatedPatchResponse := httptest.NewRecorder()
+	api.ServeHTTP(unauthenticatedPatchResponse, unauthenticatedPatchRequest)
+	if unauthenticatedPatchResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated toggle status = %d, want %d", unauthenticatedPatchResponse.Code, http.StatusUnauthorized)
+	}
+
+	for _, wantActive := range []bool{true, false} {
+		toggleRequest := httptest.NewRequest(http.MethodPatch, putPath+"/active", nil)
+		toggleRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+		toggleResponse := httptest.NewRecorder()
+		api.ServeHTTP(toggleResponse, toggleRequest)
+		if toggleResponse.Code != http.StatusOK {
+			t.Fatalf("owner toggle status = %d, want %d; body: %s", toggleResponse.Code, http.StatusOK, toggleResponse.Body.String())
+		}
+
+		var toggledArena arena.Arena
+		if err := json.Unmarshal(toggleResponse.Body.Bytes(), &toggledArena); err != nil {
+			t.Fatalf("decode toggled arena response: %v", err)
+		}
+		if toggledArena.Active != wantActive {
+			t.Errorf("toggle active = %t, want %t", toggledArena.Active, wantActive)
+		}
+	}
+
+	otherOwnerPutRequest := httptest.NewRequest(http.MethodPut, putPath, strings.NewReader(putBody))
+	otherOwnerPutRequest.Header.Set("Content-Type", "application/json")
+	otherOwnerPutRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: secondSession.Token})
+	otherOwnerPutResponse := httptest.NewRecorder()
+	api.ServeHTTP(otherOwnerPutResponse, otherOwnerPutRequest)
+	if otherOwnerPutResponse.Code != http.StatusNotFound {
+		t.Fatalf("other owner's update status = %d, want %d", otherOwnerPutResponse.Code, http.StatusNotFound)
+	}
+
+	otherOwnerPatchRequest := httptest.NewRequest(http.MethodPatch, putPath+"/active", nil)
+	otherOwnerPatchRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: secondSession.Token})
+	otherOwnerPatchResponse := httptest.NewRecorder()
+	api.ServeHTTP(otherOwnerPatchResponse, otherOwnerPatchRequest)
+	if otherOwnerPatchResponse.Code != http.StatusNotFound {
+		t.Fatalf("other owner's toggle status = %d, want %d", otherOwnerPatchResponse.Code, http.StatusNotFound)
 	}
 }

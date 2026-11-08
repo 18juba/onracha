@@ -29,6 +29,8 @@ type ArenaService interface {
 	Create(ctx context.Context, ownerUserID int64, details arena.Details) (arena.Arena, error)
 	ListByOwner(ctx context.Context, ownerUserID int64) ([]arena.Arena, error)
 	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
+	Update(ctx context.Context, arenaID, ownerUserID int64, details arena.Details, active bool) (arena.Arena, error)
+	ToggleActive(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
 }
 
 // Config contains browser-facing HTTP settings for the API.
@@ -66,6 +68,8 @@ func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
 	mux.HandleFunc("GET /api/v1/arenas", api.listArenas)
 	mux.HandleFunc("GET /api/v1/arenas/{id}", api.getArena)
+	mux.HandleFunc("PUT /api/v1/arenas/{id}", api.updateArena)
+	mux.HandleFunc("PATCH /api/v1/arenas/{id}/active", api.toggleArenaActive)
 	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
 
 	return api.cors(api.requestLogger(mux))
@@ -165,8 +169,8 @@ func (h *handler) getArena(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	arenaID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || arenaID <= 0 {
+	arenaID, err := parseArenaID(r.PathValue("id"))
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
 		return
 	}
@@ -182,6 +186,82 @@ func (h *handler) getArena(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, value)
+}
+
+func (h *handler) updateArena(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, err := parseArenaID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	var request struct {
+		Name      string `json:"name"`
+		ArenaType string `json:"arena_type"`
+		Address   string `json:"address"`
+		City      string `json:"city"`
+		State     string `json:"state"`
+		Active    *bool  `json:"active"`
+	}
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if request.Active == nil {
+		writeError(w, http.StatusBadRequest, "invalid_input", "Informe todos os dados da arena, incluindo o estado de atividade.")
+		return
+	}
+
+	updatedArena, err := h.arenaService.Update(r.Context(), arenaID, user.ID, arena.Details{
+		Name:      request.Name,
+		ArenaType: request.ArenaType,
+		Address:   request.Address,
+		City:      request.City,
+		State:     request.State,
+	}, *request.Active)
+	if err != nil {
+		if errors.Is(err, arena.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "arena_not_found", "Arena não encontrada.")
+			return
+		}
+		if isInvalidArenaDetails(err) {
+			writeError(w, http.StatusBadRequest, "invalid_input", "Confira os dados completos da arena.")
+			return
+		}
+		h.logger.Error("arena update failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível atualizar a arena.")
+		return
+	}
+	writeJSON(w, http.StatusOK, updatedArena)
+}
+
+func (h *handler) toggleArenaActive(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, err := parseArenaID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	updatedArena, err := h.arenaService.ToggleActive(r.Context(), arenaID, user.ID)
+	if err != nil {
+		if errors.Is(err, arena.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "arena_not_found", "Arena não encontrada.")
+			return
+		}
+		h.logger.Error("arena active status toggle failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível alterar o estado da arena.")
+		return
+	}
+	writeJSON(w, http.StatusOK, updatedArena)
 }
 
 func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
@@ -209,19 +289,32 @@ func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 		State:     request.State,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, arena.ErrInvalidName), errors.Is(err, arena.ErrInvalidType),
-			errors.Is(err, arena.ErrInvalidAddress), errors.Is(err, arena.ErrInvalidCity),
-			errors.Is(err, arena.ErrInvalidState):
+		if isInvalidArenaDetails(err) {
 			writeError(w, http.StatusBadRequest, "invalid_input", "Confira os dados da arena.")
-		default:
-			h.logger.Error("arena registration failed")
-			writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível cadastrar a arena.")
+			return
 		}
+		h.logger.Error("arena registration failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível cadastrar a arena.")
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, createdArena)
+}
+
+func parseArenaID(value string) (int64, error) {
+	arenaID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || arenaID <= 0 {
+		return 0, arena.ErrInvalidArenaID
+	}
+	return arenaID, nil
+}
+
+func isInvalidArenaDetails(err error) bool {
+	return errors.Is(err, arena.ErrInvalidName) ||
+		errors.Is(err, arena.ErrInvalidType) ||
+		errors.Is(err, arena.ErrInvalidAddress) ||
+		errors.Is(err, arena.ErrInvalidCity) ||
+		errors.Is(err, arena.ErrInvalidState)
 }
 
 func (h *handler) authenticatedUser(w http.ResponseWriter, r *http.Request) (auth.User, bool) {
@@ -251,7 +344,7 @@ func (h *handler) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
 			w.Header().Add("Vary", "Origin")
 		}
 		if r.Method == http.MethodOptions {

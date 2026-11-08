@@ -1,0 +1,2 @@
+ALTER TABLE arenas
+DROP COLUMN active;

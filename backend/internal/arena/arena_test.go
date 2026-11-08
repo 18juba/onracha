@@ -21,6 +21,9 @@ func TestNewArenaNormalizesDetails(t *testing.T) {
 	if got.OwnerUserID != 17 || got.Name != "Arena Central" || got.ArenaType != "society" || got.Address != "Rua do Esporte, 100" || got.City != "São Paulo" || got.State != "SP" {
 		t.Errorf("NewArena() = %+v, want normalized details and owner", got)
 	}
+	if !got.Active {
+		t.Error("NewArena().Active = false, want newly registered arenas to be active")
+	}
 }
 
 func TestNewArenaRequiresOwner(t *testing.T) {
@@ -78,8 +81,8 @@ func TestServiceCreatePersistsValidArena(t *testing.T) {
 	if repository.createCalls != 1 || repository.savedArena.OwnerUserID != 17 {
 		t.Fatalf("repository received %d creates and arena %+v", repository.createCalls, repository.savedArena)
 	}
-	if created.ID != 42 || !created.CreatedAt.Equal(createdAt) {
-		t.Errorf("Create() = %+v, want persisted ID and timestamp", created)
+	if created.ID != 42 || !created.CreatedAt.Equal(createdAt) || !created.Active {
+		t.Errorf("Create() = %+v, want persisted ID, timestamp and active status", created)
 	}
 }
 
@@ -188,6 +191,134 @@ func TestServiceGetByIDAndOwnerReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceUpdatePersistsFullArenaDetails(t *testing.T) {
+	want := Arena{
+		ID: 42, OwnerUserID: 17, Name: "Arena Central", ArenaType: "society",
+		Address: "Rua do Esporte, 100", City: "São Paulo", State: "SP", Active: false,
+	}
+	repository := &fakeRepository{updatedArena: want}
+	service := NewService(repository)
+	details := Details{
+		Name: " Arena Central ", ArenaType: " Society ", Address: " Rua do Esporte, 100 ",
+		City: " São Paulo ", State: " sp ",
+	}
+
+	got, err := service.Update(context.Background(), 42, 17, details, false)
+	if err != nil {
+		t.Fatalf("Update() error = %v, want nil", err)
+	}
+	if repository.updateCalls != 1 || repository.updatedValue.ID != 42 || repository.updatedValue.OwnerUserID != 17 || repository.updatedValue.Active {
+		t.Errorf("repository update calls = %d, value = %+v; want arena 42, owner 17 and inactive", repository.updateCalls, repository.updatedValue)
+	}
+	if got != want {
+		t.Errorf("Update() = %+v, want %+v", got, want)
+	}
+}
+
+func TestServiceUpdateRejectsInvalidArenaID(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.Update(context.Background(), 0, 17, validDetails(), true)
+	if !errors.Is(err, ErrInvalidArenaID) {
+		t.Fatalf("Update() error = %v, want %v", err, ErrInvalidArenaID)
+	}
+	if repository.updateCalls != 0 {
+		t.Errorf("repository update calls = %d, want 0", repository.updateCalls)
+	}
+}
+
+func TestServiceUpdateRejectsInvalidOwner(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.Update(context.Background(), 42, 0, validDetails(), true)
+	if !errors.Is(err, ErrInvalidOwner) {
+		t.Fatalf("Update() error = %v, want %v", err, ErrInvalidOwner)
+	}
+	if repository.updateCalls != 0 {
+		t.Errorf("repository update calls = %d, want 0", repository.updateCalls)
+	}
+}
+
+func TestServiceUpdateDoesNotPersistInvalidDetails(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+	details := validDetails()
+	details.Name = " "
+
+	_, err := service.Update(context.Background(), 42, 17, details, true)
+	if !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("Update() error = %v, want %v", err, ErrInvalidName)
+	}
+	if repository.updateCalls != 0 {
+		t.Errorf("repository update calls = %d, want 0", repository.updateCalls)
+	}
+}
+
+func TestServiceUpdateReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{updateError: wantErr})
+
+	_, err := service.Update(context.Background(), 42, 17, validDetails(), true)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Update() error = %v, want wrapped repository error %v", err, wantErr)
+	}
+}
+
+func TestServiceToggleActiveReturnsRepositoryArena(t *testing.T) {
+	want := Arena{ID: 42, OwnerUserID: 17, Active: false}
+	repository := &fakeRepository{toggledArena: want}
+	service := NewService(repository)
+
+	got, err := service.ToggleActive(context.Background(), 42, 17)
+	if err != nil {
+		t.Fatalf("ToggleActive() error = %v, want nil", err)
+	}
+	if repository.toggleCalls != 1 || repository.toggleArenaID != 42 || repository.toggleOwnerID != 17 {
+		t.Errorf("repository toggle calls = %d, arena ID = %d, owner ID = %d; want one call for arena 42 and owner 17", repository.toggleCalls, repository.toggleArenaID, repository.toggleOwnerID)
+	}
+	if got != want {
+		t.Errorf("ToggleActive() = %+v, want %+v", got, want)
+	}
+}
+
+func TestServiceToggleActiveRejectsInvalidArenaID(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.ToggleActive(context.Background(), 0, 17)
+	if !errors.Is(err, ErrInvalidArenaID) {
+		t.Fatalf("ToggleActive() error = %v, want %v", err, ErrInvalidArenaID)
+	}
+	if repository.toggleCalls != 0 {
+		t.Errorf("repository toggle calls = %d, want 0", repository.toggleCalls)
+	}
+}
+
+func TestServiceToggleActiveRejectsInvalidOwner(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.ToggleActive(context.Background(), 42, 0)
+	if !errors.Is(err, ErrInvalidOwner) {
+		t.Fatalf("ToggleActive() error = %v, want %v", err, ErrInvalidOwner)
+	}
+	if repository.toggleCalls != 0 {
+		t.Errorf("repository toggle calls = %d, want 0", repository.toggleCalls)
+	}
+}
+
+func TestServiceToggleActiveReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{toggleError: wantErr})
+
+	_, err := service.ToggleActive(context.Background(), 42, 17)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("ToggleActive() error = %v, want wrapped repository error %v", err, wantErr)
+	}
+}
+
 func TestServiceCreateReturnsRepositoryError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
 	service := NewService(&fakeRepository{createError: wantErr})
@@ -237,6 +368,34 @@ type fakeRepository struct {
 	queriedOwnerID int64
 	getCalls       int
 	getError       error
+	updatedValue   Arena
+	updatedArena   Arena
+	updateCalls    int
+	updateError    error
+	toggleArenaID  int64
+	toggleOwnerID  int64
+	toggledArena   Arena
+	toggleCalls    int
+	toggleError    error
+}
+
+func (r *fakeRepository) Update(_ context.Context, value Arena) (Arena, error) {
+	r.updateCalls++
+	r.updatedValue = value
+	if r.updateError != nil {
+		return Arena{}, r.updateError
+	}
+	return r.updatedArena, nil
+}
+
+func (r *fakeRepository) ToggleActive(_ context.Context, arenaID, ownerUserID int64) (Arena, error) {
+	r.toggleCalls++
+	r.toggleArenaID = arenaID
+	r.toggleOwnerID = ownerUserID
+	if r.toggleError != nil {
+		return Arena{}, r.toggleError
+	}
+	return r.toggledArena, nil
 }
 
 func (r *fakeRepository) GetByIDAndOwner(_ context.Context, arenaID, ownerUserID int64) (Arena, error) {
@@ -271,5 +430,6 @@ func (r *fakeRepository) Create(_ context.Context, value Arena) (Arena, error) {
 	created.Address = value.Address
 	created.City = value.City
 	created.State = value.State
+	created.Active = value.Active
 	return created, nil
 }
