@@ -20,7 +20,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func TestAuthenticatedUserListsOnlyTheirArenas(t *testing.T) {
+func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("DATABASE_URL is not set; PostgreSQL integration test is skipped")
@@ -107,5 +107,49 @@ func TestAuthenticatedUserListsOnlyTheirArenas(t *testing.T) {
 	}
 	if arenas[0].ID != firstArena.ID || arenas[0].OwnerUserID != firstOwner.ID {
 		t.Errorf("listed arena = %+v, want first owner's arena %d", arenas[0], firstArena.ID)
+	}
+
+	detailPath := fmt.Sprintf("/api/v1/arenas/%d", firstArena.ID)
+	unauthenticatedDetailRequest := httptest.NewRequest(http.MethodGet, detailPath, nil)
+	unauthenticatedDetailResponse := httptest.NewRecorder()
+	api.ServeHTTP(unauthenticatedDetailResponse, unauthenticatedDetailRequest)
+	if unauthenticatedDetailResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated detail status = %d, want %d", unauthenticatedDetailResponse.Code, http.StatusUnauthorized)
+	}
+
+	ownerDetailRequest := httptest.NewRequest(http.MethodGet, detailPath, nil)
+	ownerDetailRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+	ownerDetailResponse := httptest.NewRecorder()
+	api.ServeHTTP(ownerDetailResponse, ownerDetailRequest)
+	if ownerDetailResponse.Code != http.StatusOK {
+		t.Fatalf("owner detail status = %d, want %d; body: %s", ownerDetailResponse.Code, http.StatusOK, ownerDetailResponse.Body.String())
+	}
+
+	var ownerArena arena.Arena
+	if err := json.Unmarshal(ownerDetailResponse.Body.Bytes(), &ownerArena); err != nil {
+		t.Fatalf("decode owner detail response: %v", err)
+	}
+	if ownerArena.ID != firstArena.ID || ownerArena.OwnerUserID != firstOwner.ID || ownerArena.Name != firstArena.Name || ownerArena.ArenaType != firstArena.ArenaType || ownerArena.Address != firstArena.Address || ownerArena.City != firstArena.City || ownerArena.State != firstArena.State || !ownerArena.CreatedAt.Equal(firstArena.CreatedAt) {
+		t.Errorf("owner detail = %+v, want full arena %+v", ownerArena, firstArena)
+	}
+
+	invalidIDRequest := httptest.NewRequest(http.MethodGet, "/api/v1/arenas/not-an-integer", nil)
+	invalidIDRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+	invalidIDResponse := httptest.NewRecorder()
+	api.ServeHTTP(invalidIDResponse, invalidIDRequest)
+	if invalidIDResponse.Code != http.StatusBadRequest {
+		t.Fatalf("invalid arena ID status = %d, want %d", invalidIDResponse.Code, http.StatusBadRequest)
+	}
+
+	_, secondSession, err := authService.Login(ctx, secondOwner.Email, "Senha123")
+	if err != nil {
+		t.Fatalf("login second owner: %v", err)
+	}
+	otherOwnerRequest := httptest.NewRequest(http.MethodGet, detailPath, nil)
+	otherOwnerRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: secondSession.Token})
+	otherOwnerResponse := httptest.NewRecorder()
+	api.ServeHTTP(otherOwnerResponse, otherOwnerRequest)
+	if otherOwnerResponse.Code != http.StatusNotFound {
+		t.Fatalf("other owner's detail status = %d, want %d", otherOwnerResponse.Code, http.StatusNotFound)
 	}
 }

@@ -6,4 +6,5 @@ import "context"
 type Repository interface {
 	Create(ctx context.Context, value Arena) (Arena, error)
 	ListByOwner(ctx context.Context, ownerUserID int64) ([]Arena, error)
+	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (Arena, error)
 }

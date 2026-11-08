@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type AuthService interface {
 type ArenaService interface {
 	Create(ctx context.Context, ownerUserID int64, details arena.Details) (arena.Arena, error)
 	ListByOwner(ctx context.Context, ownerUserID int64) ([]arena.Arena, error)
+	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
 }
 
 // Config contains browser-facing HTTP settings for the API.
@@ -63,6 +65,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
 	mux.HandleFunc("GET /api/v1/arenas", api.listArenas)
+	mux.HandleFunc("GET /api/v1/arenas/{id}", api.getArena)
 	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
 
 	return api.cors(api.requestLogger(mux))
@@ -154,6 +157,31 @@ func (h *handler) listArenas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, arenas)
+}
+
+func (h *handler) getArena(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || arenaID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	value, err := h.arenaService.GetByIDAndOwner(r.Context(), arenaID, user.ID)
+	if err != nil {
+		if errors.Is(err, arena.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "arena_not_found", "Arena não encontrada.")
+			return
+		}
+		h.logger.Error("arena lookup failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível consultar a arena.")
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
 }
 
 func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +277,10 @@ func (h *handler) requestLogger(next http.Handler) http.Handler {
 }
 
 func requestRoute(r *http.Request) string {
+	if r.Pattern != "" {
+		return r.Pattern
+	}
+
 	route := r.Method + " " + r.URL.Path
 	switch route {
 	case "GET /health", "GET /openapi.yaml", "GET /swagger", "GET /swagger/", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me", "GET /api/v1/arenas", "POST /api/v1/arenas":

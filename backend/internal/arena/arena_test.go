@@ -135,6 +135,59 @@ func TestServiceListByOwnerReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceGetByIDAndOwnerReturnsRepositoryArena(t *testing.T) {
+	want := Arena{ID: 42, OwnerUserID: 17, Name: "Arena Central"}
+	repository := &fakeRepository{queriedArena: want}
+	service := NewService(repository)
+
+	got, err := service.GetByIDAndOwner(context.Background(), 42, 17)
+	if err != nil {
+		t.Fatalf("GetByIDAndOwner() error = %v, want nil", err)
+	}
+	if repository.getCalls != 1 || repository.queriedArenaID != 42 || repository.queriedOwnerID != 17 {
+		t.Errorf("repository get calls = %d, arena ID = %d, owner ID = %d; want one call for arena 42 and owner 17", repository.getCalls, repository.queriedArenaID, repository.queriedOwnerID)
+	}
+	if got != want {
+		t.Errorf("GetByIDAndOwner() = %+v, want %+v", got, want)
+	}
+}
+
+func TestServiceGetByIDAndOwnerRejectsInvalidArenaID(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.GetByIDAndOwner(context.Background(), 0, 17)
+	if !errors.Is(err, ErrInvalidArenaID) {
+		t.Fatalf("GetByIDAndOwner() error = %v, want %v", err, ErrInvalidArenaID)
+	}
+	if repository.getCalls != 0 {
+		t.Errorf("repository get calls = %d, want 0", repository.getCalls)
+	}
+}
+
+func TestServiceGetByIDAndOwnerRejectsInvalidOwner(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.GetByIDAndOwner(context.Background(), 42, 0)
+	if !errors.Is(err, ErrInvalidOwner) {
+		t.Fatalf("GetByIDAndOwner() error = %v, want %v", err, ErrInvalidOwner)
+	}
+	if repository.getCalls != 0 {
+		t.Errorf("repository get calls = %d, want 0", repository.getCalls)
+	}
+}
+
+func TestServiceGetByIDAndOwnerReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{getError: wantErr})
+
+	_, err := service.GetByIDAndOwner(context.Background(), 42, 17)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("GetByIDAndOwner() error = %v, want wrapped repository error %v", err, wantErr)
+	}
+}
+
 func TestServiceCreateReturnsRepositoryError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
 	service := NewService(&fakeRepository{createError: wantErr})
@@ -171,14 +224,29 @@ func validDetails() Details {
 }
 
 type fakeRepository struct {
-	createdArena  Arena
-	savedArena    Arena
-	createCalls   int
-	createError   error
-	listedArenas  []Arena
-	listedOwnerID int64
-	listCalls     int
-	listError     error
+	createdArena   Arena
+	savedArena     Arena
+	createCalls    int
+	createError    error
+	listedArenas   []Arena
+	listedOwnerID  int64
+	listCalls      int
+	listError      error
+	queriedArena   Arena
+	queriedArenaID int64
+	queriedOwnerID int64
+	getCalls       int
+	getError       error
+}
+
+func (r *fakeRepository) GetByIDAndOwner(_ context.Context, arenaID, ownerUserID int64) (Arena, error) {
+	r.getCalls++
+	r.queriedArenaID = arenaID
+	r.queriedOwnerID = ownerUserID
+	if r.getError != nil {
+		return Arena{}, r.getError
+	}
+	return r.queriedArena, nil
 }
 
 func (r *fakeRepository) ListByOwner(_ context.Context, ownerUserID int64) ([]Arena, error) {

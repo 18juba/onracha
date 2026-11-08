@@ -8,6 +8,8 @@ import (
 
 var (
 	ErrInvalidOwner   = errors.New("arena owner is invalid")
+	ErrInvalidArenaID = errors.New("arena ID is invalid")
+	ErrNotFound       = errors.New("arena not found")
 	ErrInvalidName    = errors.New("arena name is required")
 	ErrInvalidType    = errors.New("arena type is required")
 	ErrInvalidAddress = errors.New("arena address is required")

@@ -44,3 +44,19 @@ func (s *Service) ListByOwner(ctx context.Context, ownerUserID int64) ([]Arena, 
 	}
 	return arenas, nil
 }
+
+// GetByIDAndOwner returns an arena only when it belongs to the requested owner.
+func (s *Service) GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (Arena, error) {
+	if arenaID <= 0 {
+		return Arena{}, ErrInvalidArenaID
+	}
+	if ownerUserID <= 0 {
+		return Arena{}, ErrInvalidOwner
+	}
+
+	value, err := s.repository.GetByIDAndOwner(ctx, arenaID, ownerUserID)
+	if err != nil {
+		return Arena{}, fmt.Errorf("get arena by ID and owner: %w", err)
+	}
+	return value, nil
+}
