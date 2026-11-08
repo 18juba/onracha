@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"onracha/internal/arena"
 	"onracha/internal/auth"
 )
 
@@ -22,6 +23,11 @@ type AuthService interface {
 	Authenticate(ctx context.Context, token string) (auth.User, error)
 }
 
+// ArenaService describes arena registration operations exposed over HTTP.
+type ArenaService interface {
+	Create(ctx context.Context, ownerUserID int64, details arena.Details) (arena.Arena, error)
+}
+
 // Config contains browser-facing HTTP settings for the API.
 type Config struct {
 	AllowedOrigin   string
@@ -30,13 +36,14 @@ type Config struct {
 }
 
 type handler struct {
-	authService AuthService
-	logger      *slog.Logger
-	config      Config
+	authService  AuthService
+	arenaService ArenaService
+	logger       *slog.Logger
+	config       Config
 }
 
 // NewRouter builds the API routes and request logging middleware.
-func NewRouter(authService AuthService, logger *slog.Logger, config Config) http.Handler {
+func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.Logger, config Config) http.Handler {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
@@ -45,7 +52,7 @@ func NewRouter(authService AuthService, logger *slog.Logger, config Config) http
 		config.OpenAPISpecPath = "../docs/openapi.yaml"
 	}
 
-	api := &handler{authService: authService, logger: logger, config: config}
+	api := &handler{authService: authService, arenaService: arenaService, logger: logger, config: config}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", api.health)
 	mux.HandleFunc("GET /openapi.yaml", api.openAPISpec)
@@ -54,6 +61,7 @@ func NewRouter(authService AuthService, logger *slog.Logger, config Config) http
 	mux.HandleFunc("POST /api/v1/auth/register", api.register)
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
+	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
 
 	return api.cors(api.requestLogger(mux))
 }
@@ -124,26 +132,72 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) me(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "unauthenticated", "Entre na sua conta para continuar.")
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
 		return
 	}
-
-	user, err := h.authService.Authenticate(r.Context(), cookie.Value)
-	if err != nil {
-		if errors.Is(err, auth.ErrInvalidSession) {
-			writeError(w, http.StatusUnauthorized, "unauthenticated", "Entre na sua conta para continuar.")
-			return
-		}
-		h.logger.Error("session lookup failed")
-		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível validar a sessão.")
-		return
-	}
-
 	writeJSON(w, http.StatusOK, user)
 }
 
+func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	var request struct {
+		Name      string `json:"name"`
+		ArenaType string `json:"arena_type"`
+		Address   string `json:"address"`
+		City      string `json:"city"`
+		State     string `json:"state"`
+	}
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+
+	createdArena, err := h.arenaService.Create(r.Context(), user.ID, arena.Details{
+		Name:      request.Name,
+		ArenaType: request.ArenaType,
+		Address:   request.Address,
+		City:      request.City,
+		State:     request.State,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, arena.ErrInvalidName), errors.Is(err, arena.ErrInvalidType),
+			errors.Is(err, arena.ErrInvalidAddress), errors.Is(err, arena.ErrInvalidCity),
+			errors.Is(err, arena.ErrInvalidState):
+			writeError(w, http.StatusBadRequest, "invalid_input", "Confira os dados da arena.")
+		default:
+			h.logger.Error("arena registration failed")
+			writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível cadastrar a arena.")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createdArena)
+}
+
+func (h *handler) authenticatedUser(w http.ResponseWriter, r *http.Request) (auth.User, bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		writeError(w, http.StatusUnauthorized, "unauthenticated", "Entre na sua conta para continuar.")
+		return auth.User{}, false
+	}
+
+	user, err := h.authService.Authenticate(r.Context(), cookie.Value)
+	if errors.Is(err, auth.ErrInvalidSession) {
+		writeError(w, http.StatusUnauthorized, "unauthenticated", "Entre na sua conta para continuar.")
+		return auth.User{}, false
+	}
+	if err != nil {
+		h.logger.Error("session lookup failed")
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível validar a sessão.")
+		return auth.User{}, false
+	}
+	return user, true
+}
 func (h *handler) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -179,7 +233,7 @@ func (h *handler) requestLogger(next http.Handler) http.Handler {
 func requestRoute(r *http.Request) string {
 	route := r.Method + " " + r.URL.Path
 	switch route {
-	case "GET /health", "GET /openapi.yaml", "GET /swagger", "GET /swagger/", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me":
+	case "GET /health", "GET /openapi.yaml", "GET /swagger", "GET /swagger/", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me", "POST /api/v1/arenas":
 		return route
 	default:
 		return "unmatched"

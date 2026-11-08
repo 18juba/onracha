@@ -66,12 +66,15 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Enforce auth domain coverage
+      - name: Enforce domain coverage
         run: |
           go test ./internal/auth/... -coverprofile=/tmp/auth-coverage.out
-          coverage="$(go tool cover -func=/tmp/auth-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
-          echo "Auth domain coverage: ${coverage}% (minimum: 80%)"
-          awk -v coverage="$coverage" 'BEGIN { exit !(coverage >= 80) }'
+          go test ./internal/arena/... -coverprofile=/tmp/arena-coverage.out
+          auth_coverage="$(go tool cover -func=/tmp/auth-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
+          arena_coverage="$(go tool cover -func=/tmp/arena-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
+          echo "Auth domain coverage: ${auth_coverage}% (minimum: 80%)"
+          echo "Arena domain coverage: ${arena_coverage}% (minimum: 80%)"
+          awk -v auth="$auth_coverage" -v arena="$arena_coverage" 'BEGIN { exit !(auth >= 80 && arena >= 80) }'
 
       - name: Build
         run: go build ./...

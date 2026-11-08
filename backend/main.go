@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"onracha/internal/arena"
 	"onracha/internal/auth"
 	"onracha/internal/httpapi"
 	"onracha/internal/postgres"
@@ -57,9 +58,10 @@ func run(logger *slog.Logger) error {
 	}
 
 	authService := auth.NewService(postgres.NewAuthRepository(database), auth.NewArgon2idHasher())
+	arenaService := arena.NewService(postgres.NewArenaRepository(database))
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           httpapi.NewRouter(authService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies, OpenAPISpecPath: openAPISpecPath}),
+		Handler:           httpapi.NewRouter(authService, arenaService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies, OpenAPISpecPath: openAPISpecPath}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

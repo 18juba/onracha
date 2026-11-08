@@ -49,7 +49,7 @@ func TestPostgreSQLRegistrationLoginAndCurrentAccount(t *testing.T) {
 
 	service := auth.NewService(postgres.NewAuthRepository(database), auth.NewArgon2idHasher())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	api := NewRouter(service, logger, Config{AllowedOrigin: "http://localhost:5173"})
+	api := NewRouter(service, nil, logger, Config{AllowedOrigin: "http://localhost:5173"})
 
 	registerRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Integration Player","email":"`+email+`","password":"Senha123"}`))
 	registerRequest.Header.Set("Content-Type", "application/json")

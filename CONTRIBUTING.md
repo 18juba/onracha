@@ -23,7 +23,7 @@ Em correções de defeitos, primeiro crie um teste que reproduza o problema. Man
 - Testes unitários do domínio devem cobrir regras e resultados relevantes sem iniciar servidor ou banco de dados.
 - Testes de integração devem verificar que componentes reais funcionam juntos em uma fronteira importante, como roteamento e resposta HTTP. Para HTTP, prefira `net/http/httptest`.
 - Use nomes de testes que expliquem o cenário e o resultado esperado.
-- O mínimo é **80% de cobertura nos pacotes de domínio**. A CI aplica esse limite a `internal/auth`; ao adicionar outros pacotes de domínio, inclua-os na verificação. Cobertura complementa os testes de comportamento; não substitui bons cenários.
+- O mínimo é **80% de cobertura nos pacotes de domínio**. A CI aplica esse limite a `internal/auth` e `internal/arena`; inclua qualquer novo pacote de domínio na verificação. Cobertura complementa os testes de comportamento; não substitui bons cenários.
 
 ### Logs estruturados
 
