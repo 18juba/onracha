@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -141,4 +142,25 @@ func (s *Service) Leave(ctx context.Context, gameID, userID int64) error {
 		return fmt.Errorf("leave game: %w", err)
 	}
 	return nil
+}
+
+// SearchAvailable returns future games the user can join under current time rules.
+func (s *Service) SearchAvailable(ctx context.Context, userID int64, filters SearchFilters) ([]SearchResult, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidUserID
+	}
+	if (filters.DateStart == nil) != (filters.DateEnd == nil) ||
+		(filters.DateStart != nil && !filters.DateEnd.After(*filters.DateStart)) {
+		return nil, ErrInvalidSearchFilters
+	}
+
+	filters.City = strings.TrimSpace(filters.City)
+	values, err := s.games.SearchAvailable(ctx, userID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("search available games: %w", err)
+	}
+	if values == nil {
+		values = []SearchResult{}
+	}
+	return values, nil
 }

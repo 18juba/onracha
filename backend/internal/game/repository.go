@@ -18,4 +18,5 @@ type GameRepository interface {
 	GetByID(ctx context.Context, gameID int64) (Game, error)
 	Join(ctx context.Context, gameID, userID int64) (Game, error)
 	Leave(ctx context.Context, gameID, userID int64) error
+	SearchAvailable(ctx context.Context, userID int64, filters SearchFilters) ([]SearchResult, error)
 }

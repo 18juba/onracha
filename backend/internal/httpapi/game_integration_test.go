@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -81,9 +82,10 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	}
 
 	arenaService := arena.NewService(postgres.NewArenaRepository(database))
+	cities := []string{"São Paulo", "Campinas"}
 	for index, name := range []string{"First Test Arena", "Second Test Arena"} {
 		created, err := arenaService.Create(ctx, users[0].ID, arena.Details{
-			Name: name, ArenaType: "society", Address: "Rua do Esporte, 100", City: "São Paulo", State: "SP",
+			Name: name, ArenaType: "society", Address: "Rua do Esporte, 100", City: cities[index], State: "SP",
 		})
 		if err != nil {
 			t.Fatalf("create arena %d: %v", index, err)
@@ -119,7 +121,7 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		return response
 	}
 
-	startsAt := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Minute)
+	startsAt := time.Now().UTC().Add(72 * time.Hour).Truncate(24 * time.Hour).Add(10 * time.Hour)
 	endsAt := startsAt.Add(time.Hour)
 	createSlot := func(arenaID int64, start, end time.Time) game.TimeSlot {
 		t.Helper()
@@ -165,6 +167,7 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	if len(availableSlots) != 2 {
 		t.Fatalf("available slots = %d, want 2", len(availableSlots))
 	}
+	nextDaySlot := createSlot(arenas[0].ID, startsAt.Add(24*time.Hour), endsAt.Add(24*time.Hour))
 
 	schedule := func(slotID int64, session *auth.Session) (*httptest.ResponseRecorder, game.Game) {
 		t.Helper()
@@ -204,6 +207,10 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	overlappingGameResponse, overlappingGame := schedule(overlappingSlot.ID, secondOrganizerSession)
 	if overlappingGameResponse.Code != http.StatusCreated {
 		t.Fatalf("schedule overlapping slot by another user status = %d, want %d; body: %s", overlappingGameResponse.Code, http.StatusCreated, overlappingGameResponse.Body.String())
+	}
+	nextDayGameResponse, nextDayGame := schedule(nextDaySlot.ID, secondOrganizerSession)
+	if nextDayGameResponse.Code != http.StatusCreated {
+		t.Fatalf("schedule next-day game status = %d, want %d; body: %s", nextDayGameResponse.Code, http.StatusCreated, nextDayGameResponse.Body.String())
 	}
 
 	join := func(gameID int64, session *auth.Session) (*httptest.ResponseRecorder, game.Game) {
@@ -252,8 +259,8 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	if err := json.Unmarshal(gamesResponse.Body.Bytes(), &listedGames); err != nil {
 		t.Fatalf("decode listed games: %v", err)
 	}
-	if len(listedGames) != 2 {
-		t.Fatalf("listed games = %d, want 2", len(listedGames))
+	if len(listedGames) != 3 {
+		t.Fatalf("listed games = %d, want 3", len(listedGames))
 	}
 
 	myGamesResponse := request(http.MethodGet, "/api/v1/me/games", nil, playerSession)
@@ -274,6 +281,70 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		if value.ArenaID != arenas[0].ID || len(value.Participants) != 2 {
 			t.Errorf("my game = %+v, want arena %d and both participants", value, arenas[0].ID)
 		}
+	}
+
+	type gameSearchResult struct {
+		Game  game.Game `json:"game"`
+		Arena struct {
+			ID      int64  `json:"id"`
+			Name    string `json:"name"`
+			Address string `json:"address"`
+			City    string `json:"city"`
+			State   string `json:"state"`
+		} `json:"arena"`
+	}
+	searchByCityAndDatePath := fmt.Sprintf("/api/v1/games?city=%s&date=%s", url.QueryEscape("são paulo"), startsAt.Format("2006-01-02"))
+	searchByCityAndDateResponse := request(http.MethodGet, searchByCityAndDatePath, nil, ownerSession)
+	if searchByCityAndDateResponse.Code != http.StatusOK {
+		t.Fatalf("search games by city and date status = %d, want %d; body: %s", searchByCityAndDateResponse.Code, http.StatusOK, searchByCityAndDateResponse.Body.String())
+	}
+	var cityAndDateGames []gameSearchResult
+	if err := json.Unmarshal(searchByCityAndDateResponse.Body.Bytes(), &cityAndDateGames); err != nil {
+		t.Fatalf("decode games filtered by city and date: %v", err)
+	}
+	if len(cityAndDateGames) != 2 {
+		t.Fatalf("games filtered by city and date = %d, want 2", len(cityAndDateGames))
+	}
+	if cityAndDateGames[0].Game.ID != firstGame.ID || cityAndDateGames[1].Game.ID != secondGame.ID {
+		t.Errorf("filtered game IDs = [%d, %d], want [%d, %d]", cityAndDateGames[0].Game.ID, cityAndDateGames[1].Game.ID, firstGame.ID, secondGame.ID)
+	}
+	for _, value := range cityAndDateGames {
+		if value.Arena.City != "São Paulo" || value.Arena.ID != arenas[0].ID {
+			t.Errorf("search result arena = %+v, want arena %d in São Paulo", value.Arena, arenas[0].ID)
+		}
+	}
+
+	searchByCityResponse := request(http.MethodGet, "/api/v1/games?city=Campinas", nil, ownerSession)
+	if searchByCityResponse.Code != http.StatusOK {
+		t.Fatalf("search games by city status = %d, want %d; body: %s", searchByCityResponse.Code, http.StatusOK, searchByCityResponse.Body.String())
+	}
+	var campinasGames []gameSearchResult
+	if err := json.Unmarshal(searchByCityResponse.Body.Bytes(), &campinasGames); err != nil {
+		t.Fatalf("decode games filtered by Campinas: %v", err)
+	}
+	if len(campinasGames) != 1 || campinasGames[0].Game.ID != overlappingGame.ID || campinasGames[0].Arena.City != "Campinas" {
+		t.Errorf("games filtered by Campinas = %+v, want only game %d in Campinas", campinasGames, overlappingGame.ID)
+	}
+
+	searchAvailableForPlayerResponse := request(http.MethodGet, "/api/v1/games", nil, playerSession)
+	var availableForPlayer []gameSearchResult
+	if searchAvailableForPlayerResponse.Code != http.StatusOK {
+		t.Fatalf("search available games for player status = %d, want %d", searchAvailableForPlayerResponse.Code, http.StatusOK)
+	}
+	if err := json.Unmarshal(searchAvailableForPlayerResponse.Body.Bytes(), &availableForPlayer); err != nil {
+		t.Fatalf("decode available games for player: %v", err)
+	}
+	if len(availableForPlayer) != 1 || availableForPlayer[0].Game.ID != nextDayGame.ID {
+		t.Errorf("available games for player = %+v, want only non-overlapping game %d", availableForPlayer, nextDayGame.ID)
+	}
+
+	invalidSearchDateResponse := request(http.MethodGet, "/api/v1/games?date=not-a-date", nil, ownerSession)
+	if invalidSearchDateResponse.Code != http.StatusBadRequest {
+		t.Errorf("invalid search date status = %d, want %d", invalidSearchDateResponse.Code, http.StatusBadRequest)
+	}
+	unauthenticatedGameSearch := request(http.MethodGet, "/api/v1/games", nil, nil)
+	if unauthenticatedGameSearch.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated game search status = %d, want %d", unauthenticatedGameSearch.Code, http.StatusUnauthorized)
 	}
 
 	gameDetailsResponse := request(http.MethodGet, fmt.Sprintf("/api/v1/games/%d", firstGame.ID), nil, playerSession)

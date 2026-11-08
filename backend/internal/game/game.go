@@ -17,6 +17,7 @@ var (
 	ErrUserTimeConflict     = errors.New("user already has a game at that time")
 	ErrAlreadyParticipating = errors.New("user already joined this game")
 	ErrOrganizerCannotLeave = errors.New("game organizer cannot leave the game")
+	ErrInvalidSearchFilters = errors.New("game search date range is invalid")
 	ErrNotFound             = errors.New("game or time slot not found")
 )
 
@@ -39,6 +40,28 @@ type Game struct {
 	EndsAt          time.Time `json:"ends_at"`
 	Participants    []int64   `json:"participant_user_ids"`
 	CreatedAt       time.Time `json:"created_at"`
+}
+
+// SearchFilters narrows the games a user can discover.
+type SearchFilters struct {
+	City      string
+	DateStart *time.Time
+	DateEnd   *time.Time
+}
+
+// ArenaSummary contains the public venue details needed to browse a game.
+type ArenaSummary struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	City    string `json:"city"`
+	State   string `json:"state"`
+}
+
+// SearchResult combines a game with its arena summary for discovery results.
+type SearchResult struct {
+	Game  Game         `json:"game"`
+	Arena ArenaSummary `json:"arena"`
 }
 
 // NewTimeSlot validates the arena and a future interval with a positive duration.

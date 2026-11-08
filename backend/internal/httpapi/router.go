@@ -44,6 +44,7 @@ type GameService interface {
 	GetByID(ctx context.Context, gameID int64) (game.Game, error)
 	Join(ctx context.Context, gameID, userID int64) (game.Game, error)
 	Leave(ctx context.Context, gameID, userID int64) error
+	SearchAvailable(ctx context.Context, userID int64, filters game.SearchFilters) ([]game.SearchResult, error)
 }
 
 // Config contains browser-facing HTTP settings for the API.
@@ -89,6 +90,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("GET /api/v1/arenas/{id}/time-slots", api.listAvailableTimeSlots)
 	mux.HandleFunc("GET /api/v1/arenas/{id}/games", api.listGamesByArena)
 	mux.HandleFunc("GET /api/v1/me/games", api.listMyGames)
+	mux.HandleFunc("GET /api/v1/games", api.searchGames)
 	mux.HandleFunc("GET /api/v1/games/{id}", api.getGame)
 	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
 	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
@@ -426,6 +428,32 @@ func (h *handler) listMyGames(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, values)
 }
 
+func (h *handler) searchGames(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	filters := game.SearchFilters{City: r.URL.Query().Get("city")}
+	if date := r.URL.Query().Get("date"); date != "" {
+		dateStart, err := time.Parse("2006-01-02", date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_date_filter", "A data deve estar no formato AAAA-MM-DD.")
+			return
+		}
+		dateEnd := dateStart.AddDate(0, 0, 1)
+		filters.DateStart = &dateStart
+		filters.DateEnd = &dateEnd
+	}
+
+	values, err := h.gameService.SearchAvailable(r.Context(), user.ID, filters)
+	if err != nil {
+		h.writeGameError(w, err, "game search failed", "Não foi possível buscar jogos disponíveis.")
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
+}
+
 func (h *handler) getGame(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authenticatedUser(w, r); !ok {
 		return
@@ -490,7 +518,8 @@ func (h *handler) writeGameError(w http.ResponseWriter, err error, logMessage, i
 		writeError(w, http.StatusNotFound, "not_found", "Jogo ou horário não encontrado.")
 	case errors.Is(err, game.ErrInvalidArenaID), errors.Is(err, game.ErrInvalidTimeSlotID),
 		errors.Is(err, game.ErrInvalidGameID), errors.Is(err, game.ErrInvalidUserID),
-		errors.Is(err, game.ErrInvalidTimeRange), errors.Is(err, game.ErrTimeSlotInPast):
+		errors.Is(err, game.ErrInvalidTimeRange), errors.Is(err, game.ErrTimeSlotInPast),
+		errors.Is(err, game.ErrInvalidSearchFilters):
 		writeError(w, http.StatusBadRequest, "invalid_input", "Confira os dados e o horário informado.")
 	case errors.Is(err, game.ErrTimeSlotConflict), errors.Is(err, game.ErrTimeSlotUnavailable),
 		errors.Is(err, game.ErrUserTimeConflict), errors.Is(err, game.ErrAlreadyParticipating),

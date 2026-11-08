@@ -415,6 +415,74 @@ func TestServiceLeaveReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceSearchAvailablePassesNormalizedFilters(t *testing.T) {
+	startsAt := time.Date(2026, time.December, 12, 0, 0, 0, 0, time.UTC)
+	endsAt := startsAt.Add(24 * time.Hour)
+	want := []SearchResult{{Game: Game{ID: 31}, Arena: ArenaSummary{ID: 23, City: "São Paulo"}}}
+	repository := &fakeGameRepository{searchResults: want}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	got, err := service.SearchAvailable(context.Background(), 22, SearchFilters{
+		City: " São Paulo ", DateStart: &startsAt, DateEnd: &endsAt,
+	})
+	if err != nil {
+		t.Fatalf("SearchAvailable() error = %v, want nil", err)
+	}
+	if repository.searchCalls != 1 || repository.searchUserID != 22 || repository.searchFilters.City != "São Paulo" ||
+		!repository.searchFilters.DateStart.Equal(startsAt) || !repository.searchFilters.DateEnd.Equal(endsAt) ||
+		len(got) != 1 || got[0].Game.ID != want[0].Game.ID {
+		t.Errorf("SearchAvailable() = %+v; repository calls=%d user=%d filters=%+v, want %+v", got, repository.searchCalls, repository.searchUserID, repository.searchFilters, want)
+	}
+}
+
+func TestServiceSearchAvailableReturnsEmptySlice(t *testing.T) {
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{})
+
+	got, err := service.SearchAvailable(context.Background(), 22, SearchFilters{})
+	if err != nil {
+		t.Fatalf("SearchAvailable() error = %v, want nil", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("SearchAvailable() = %+v, want non-nil empty slice", got)
+	}
+}
+
+func TestServiceSearchAvailableRejectsInvalidUserOrDateRange(t *testing.T) {
+	startsAt := time.Date(2026, time.December, 12, 0, 0, 0, 0, time.UTC)
+	endsAt := startsAt
+	tests := []struct {
+		name    string
+		userID  int64
+		filters SearchFilters
+		want    error
+	}{
+		{name: "user", userID: 0, want: ErrInvalidUserID},
+		{name: "missing end date", userID: 22, filters: SearchFilters{DateStart: &startsAt}, want: ErrInvalidSearchFilters},
+		{name: "empty date range", userID: 22, filters: SearchFilters{DateStart: &startsAt, DateEnd: &endsAt}, want: ErrInvalidSearchFilters},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeGameRepository{}
+			service := NewService(&fakeTimeSlotRepository{}, repository)
+			if _, err := service.SearchAvailable(context.Background(), test.userID, test.filters); !errors.Is(err, test.want) {
+				t.Fatalf("SearchAvailable() error = %v, want %v", err, test.want)
+			}
+			if repository.searchCalls != 0 {
+				t.Errorf("repository calls = %d, want 0", repository.searchCalls)
+			}
+		})
+	}
+}
+
+func TestServiceSearchAvailableReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{searchError: wantErr})
+
+	if _, err := service.SearchAvailable(context.Background(), 22, SearchFilters{}); !errors.Is(err, wantErr) {
+		t.Fatalf("SearchAvailable() error = %v, want wrapped error %v", err, wantErr)
+	}
+}
+
 type fakeTimeSlotRepository struct {
 	createdSlot   TimeSlot
 	created       TimeSlot
@@ -469,6 +537,11 @@ type fakeGameRepository struct {
 	leaveGameID          int64
 	leaveUserID          int64
 	leaveError           error
+	searchCalls          int
+	searchUserID         int64
+	searchFilters        SearchFilters
+	searchResults        []SearchResult
+	searchError          error
 }
 
 func (r *fakeGameRepository) Schedule(_ context.Context, slotID, organizerUserID int64) (Game, error) {
@@ -514,4 +587,11 @@ func (r *fakeGameRepository) Leave(_ context.Context, gameID, userID int64) erro
 	r.leaveGameID = gameID
 	r.leaveUserID = userID
 	return r.leaveError
+}
+
+func (r *fakeGameRepository) SearchAvailable(_ context.Context, userID int64, filters SearchFilters) ([]SearchResult, error) {
+	r.searchCalls++
+	r.searchUserID = userID
+	r.searchFilters = filters
+	return r.searchResults, r.searchError
 }

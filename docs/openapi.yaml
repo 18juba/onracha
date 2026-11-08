@@ -630,6 +630,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/games:
+    get:
+      summary: Busca jogos futuros disponíveis para a conta autenticada
+      description: Retorna jogos nos quais a conta ainda não participa e que não conflitam com seus outros jogos. A data é filtrada pelo dia UTC.
+      operationId: searchAvailableGames
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: city
+          in: query
+          required: false
+          description: Cidade da arena, com correspondência exata sem diferenciar maiúsculas/minúsculas.
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          description: Dia UTC de início do jogo no formato AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Jogos disponíveis em ordem cronológica, com resumo da arena
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GameSearchResult'
+        '400':
+          description: Filtro de data inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/games/{id}:
     get:
       summary: Consulta os detalhes de um jogo
@@ -877,6 +925,29 @@ components:
         created_at:
           type: string
           format: date-time
+    GameSearchResult:
+      type: object
+      required: [game, arena]
+      properties:
+        game:
+          $ref: '#/components/schemas/Game'
+        arena:
+          $ref: '#/components/schemas/ArenaSummary'
+    ArenaSummary:
+      type: object
+      required: [id, name, address, city, state]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
     ErrorResponse:
       type: object
       required: [error]

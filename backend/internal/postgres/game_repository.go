@@ -123,6 +123,83 @@ func (r *GameRepository) GetByID(ctx context.Context, gameID int64) (game.Game, 
 	return loadGame(ctx, r.db, gameID)
 }
 
+// SearchAvailable returns upcoming games the user can join, with arena details.
+func (r *GameRepository) SearchAvailable(ctx context.Context, userID int64, filters game.SearchFilters) ([]game.SearchResult, error) {
+	const query = `
+		SELECT g.id, g.time_slot_id, slot.arena_id, g.organizer_user_id,
+		       slot.starts_at, slot.ends_at, g.created_at, participant.user_id,
+		       arena.id, arena.name, arena.address, arena.city, arena.state
+		FROM games AS g
+		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
+		JOIN arenas AS arena ON arena.id = slot.arena_id
+		LEFT JOIN game_participants AS participant ON participant.game_id = g.id
+		WHERE slot.starts_at > NOW()
+		  AND ($2 = '' OR LOWER(BTRIM(arena.city)) = LOWER($2))
+		  AND ($3::timestamptz IS NULL OR slot.starts_at >= $3)
+		  AND ($4::timestamptz IS NULL OR slot.starts_at < $4)
+		  AND NOT EXISTS (
+			SELECT 1 FROM game_participants AS current_participant
+			WHERE current_participant.game_id = g.id AND current_participant.user_id = $1
+		  )
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM game_participants AS current_participant
+			JOIN games AS current_game ON current_game.id = current_participant.game_id
+			JOIN arena_time_slots AS current_slot ON current_slot.id = current_game.time_slot_id
+			WHERE current_participant.user_id = $1
+			  AND current_game.id <> g.id
+			  AND current_slot.starts_at < slot.ends_at
+			  AND current_slot.ends_at > slot.starts_at
+		  )
+		ORDER BY slot.starts_at, g.id, participant.user_id`
+
+	var dateStart, dateEnd any
+	if filters.DateStart != nil {
+		dateStart = *filters.DateStart
+		dateEnd = *filters.DateEnd
+	}
+	rows, err := r.db.QueryContext(ctx, query, userID, filters.City, dateStart, dateEnd)
+	if err != nil {
+		return nil, fmt.Errorf("query available games: %w", err)
+	}
+	defer rows.Close()
+
+	values := make([]game.SearchResult, 0)
+	for rows.Next() {
+		var value game.SearchResult
+		var participantID sql.NullInt64
+		if err := rows.Scan(
+			&value.Game.ID,
+			&value.Game.TimeSlotID,
+			&value.Game.ArenaID,
+			&value.Game.OrganizerUserID,
+			&value.Game.StartsAt,
+			&value.Game.EndsAt,
+			&value.Game.CreatedAt,
+			&participantID,
+			&value.Arena.ID,
+			&value.Arena.Name,
+			&value.Arena.Address,
+			&value.Arena.City,
+			&value.Arena.State,
+		); err != nil {
+			return nil, fmt.Errorf("scan available game: %w", err)
+		}
+		if len(values) == 0 || values[len(values)-1].Game.ID != value.Game.ID {
+			value.Game.Participants = make([]int64, 0)
+			values = append(values, value)
+		}
+		if participantID.Valid {
+			last := &values[len(values)-1]
+			last.Game.Participants = append(last.Game.Participants, participantID.Int64)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate available games: %w", err)
+	}
+	return values, nil
+}
+
 // Join enrolls the user when no other game overlaps the requested interval.
 func (r *GameRepository) Join(ctx context.Context, gameID, userID int64) (game.Game, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
