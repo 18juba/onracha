@@ -306,4 +306,60 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	if unauthenticatedMyGames.Code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated my games status = %d, want %d", unauthenticatedMyGames.Code, http.StatusUnauthorized)
 	}
+
+	leavePath := fmt.Sprintf("/api/v1/games/%d/participants/me", firstGame.ID)
+	organizerLeaveResponse := request(http.MethodDelete, leavePath, nil, organizerSession)
+	if organizerLeaveResponse.Code != http.StatusConflict {
+		t.Errorf("organizer leave status = %d, want %d", organizerLeaveResponse.Code, http.StatusConflict)
+	}
+
+	playerLeaveResponse := request(http.MethodDelete, leavePath, nil, playerSession)
+	if playerLeaveResponse.Code != http.StatusNoContent {
+		t.Fatalf("player leave status = %d, want %d; body: %s", playerLeaveResponse.Code, http.StatusNoContent, playerLeaveResponse.Body.String())
+	}
+	if playerLeaveResponse.Body.Len() != 0 {
+		t.Errorf("player leave body = %q, want empty", playerLeaveResponse.Body.String())
+	}
+
+	repeatLeaveResponse := request(http.MethodDelete, leavePath, nil, playerSession)
+	if repeatLeaveResponse.Code != http.StatusNoContent {
+		t.Errorf("repeat leave status = %d, want %d", repeatLeaveResponse.Code, http.StatusNoContent)
+	}
+
+	updatedGameResponse := request(http.MethodGet, fmt.Sprintf("/api/v1/games/%d", firstGame.ID), nil, playerSession)
+	var updatedGame game.Game
+	if updatedGameResponse.Code != http.StatusOK {
+		t.Fatalf("get game after leaving status = %d, want %d", updatedGameResponse.Code, http.StatusOK)
+	}
+	if err := json.Unmarshal(updatedGameResponse.Body.Bytes(), &updatedGame); err != nil {
+		t.Fatalf("decode game after leaving: %v", err)
+	}
+	if len(updatedGame.Participants) != 1 || updatedGame.Participants[0] != users[1].ID {
+		t.Errorf("participants after leaving = %v, want only organizer %d", updatedGame.Participants, users[1].ID)
+	}
+
+	updatedMyGamesResponse := request(http.MethodGet, "/api/v1/me/games", nil, playerSession)
+	var updatedMyGames []game.Game
+	if updatedMyGamesResponse.Code != http.StatusOK {
+		t.Fatalf("list my games after leaving status = %d, want %d", updatedMyGamesResponse.Code, http.StatusOK)
+	}
+	if err := json.Unmarshal(updatedMyGamesResponse.Body.Bytes(), &updatedMyGames); err != nil {
+		t.Fatalf("decode my games after leaving: %v", err)
+	}
+	if len(updatedMyGames) != 1 || updatedMyGames[0].ID != secondGame.ID {
+		t.Errorf("my games after leaving = %+v, want only game %d", updatedMyGames, secondGame.ID)
+	}
+
+	missingLeaveResponse := request(http.MethodDelete, "/api/v1/games/9223372036854775807/participants/me", nil, playerSession)
+	if missingLeaveResponse.Code != http.StatusNotFound {
+		t.Errorf("leave missing game status = %d, want %d", missingLeaveResponse.Code, http.StatusNotFound)
+	}
+	invalidLeaveResponse := request(http.MethodDelete, "/api/v1/games/not-an-id/participants/me", nil, playerSession)
+	if invalidLeaveResponse.Code != http.StatusBadRequest {
+		t.Errorf("leave with invalid game ID status = %d, want %d", invalidLeaveResponse.Code, http.StatusBadRequest)
+	}
+	unauthenticatedLeaveResponse := request(http.MethodDelete, leavePath, nil, nil)
+	if unauthenticatedLeaveResponse.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated leave status = %d, want %d", unauthenticatedLeaveResponse.Code, http.StatusUnauthorized)
+	}
 }

@@ -370,6 +370,51 @@ func TestServiceJoinReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceLeavePassesGameAndUser(t *testing.T) {
+	repository := &fakeGameRepository{}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	if err := service.Leave(context.Background(), 31, 22); err != nil {
+		t.Fatalf("Leave() error = %v, want nil", err)
+	}
+	if repository.leaveCalls != 1 || repository.leaveGameID != 31 || repository.leaveUserID != 22 {
+		t.Errorf("leave calls = %d, game ID = %d, user ID = %d; want 1, 31, 22", repository.leaveCalls, repository.leaveGameID, repository.leaveUserID)
+	}
+}
+
+func TestServiceLeaveRejectsInvalidIdentifiers(t *testing.T) {
+	tests := []struct {
+		name   string
+		gameID int64
+		userID int64
+		want   error
+	}{
+		{name: "game", gameID: 0, userID: 22, want: ErrInvalidGameID},
+		{name: "user", gameID: 31, userID: 0, want: ErrInvalidUserID},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeGameRepository{}
+			service := NewService(&fakeTimeSlotRepository{}, repository)
+			if err := service.Leave(context.Background(), test.gameID, test.userID); !errors.Is(err, test.want) {
+				t.Fatalf("Leave() error = %v, want %v", err, test.want)
+			}
+			if repository.leaveCalls != 0 {
+				t.Errorf("repository calls = %d, want 0", repository.leaveCalls)
+			}
+		})
+	}
+}
+
+func TestServiceLeaveReturnsRepositoryError(t *testing.T) {
+	wantErr := ErrOrganizerCannotLeave
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{leaveError: wantErr})
+
+	if err := service.Leave(context.Background(), 31, 22); !errors.Is(err, wantErr) {
+		t.Fatalf("Leave() error = %v, want wrapped error %v", err, wantErr)
+	}
+}
+
 type fakeTimeSlotRepository struct {
 	createdSlot   TimeSlot
 	created       TimeSlot
@@ -420,6 +465,10 @@ type fakeGameRepository struct {
 	requestedGameID      int64
 	gameByID             Game
 	getByIDError         error
+	leaveCalls           int
+	leaveGameID          int64
+	leaveUserID          int64
+	leaveError           error
 }
 
 func (r *fakeGameRepository) Schedule(_ context.Context, slotID, organizerUserID int64) (Game, error) {
@@ -458,4 +507,11 @@ func (r *fakeGameRepository) Join(_ context.Context, gameID, userID int64) (Game
 		return Game{}, r.joinError
 	}
 	return r.joinedGame, nil
+}
+
+func (r *fakeGameRepository) Leave(_ context.Context, gameID, userID int64) error {
+	r.leaveCalls++
+	r.leaveGameID = gameID
+	r.leaveUserID = userID
+	return r.leaveError
 }

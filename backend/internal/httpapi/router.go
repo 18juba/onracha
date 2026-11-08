@@ -43,6 +43,7 @@ type GameService interface {
 	ListByParticipant(ctx context.Context, userID int64) ([]game.Game, error)
 	GetByID(ctx context.Context, gameID int64) (game.Game, error)
 	Join(ctx context.Context, gameID, userID int64) (game.Game, error)
+	Leave(ctx context.Context, gameID, userID int64) error
 }
 
 // Config contains browser-facing HTTP settings for the API.
@@ -91,6 +92,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("GET /api/v1/games/{id}", api.getGame)
 	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
 	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
+	mux.HandleFunc("DELETE /api/v1/games/{id}/participants/me", api.leaveGame)
 
 	return api.cors(api.requestLogger(mux))
 }
@@ -463,6 +465,25 @@ func (h *handler) joinGame(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+func (h *handler) leaveGame(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	gameID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+		return
+	}
+
+	if err := h.gameService.Leave(r.Context(), gameID, user.ID); err != nil {
+		h.writeGameError(w, err, "game exit failed", "Não foi possível sair deste jogo.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *handler) writeGameError(w http.ResponseWriter, err error, logMessage, internalMessage string) {
 	switch {
 	case errors.Is(err, game.ErrNotFound):
@@ -472,7 +493,8 @@ func (h *handler) writeGameError(w http.ResponseWriter, err error, logMessage, i
 		errors.Is(err, game.ErrInvalidTimeRange), errors.Is(err, game.ErrTimeSlotInPast):
 		writeError(w, http.StatusBadRequest, "invalid_input", "Confira os dados e o horário informado.")
 	case errors.Is(err, game.ErrTimeSlotConflict), errors.Is(err, game.ErrTimeSlotUnavailable),
-		errors.Is(err, game.ErrUserTimeConflict), errors.Is(err, game.ErrAlreadyParticipating):
+		errors.Is(err, game.ErrUserTimeConflict), errors.Is(err, game.ErrAlreadyParticipating),
+		errors.Is(err, game.ErrOrganizerCannotLeave):
 		writeError(w, http.StatusConflict, "schedule_conflict", "Esse horário não está disponível para esta operação.")
 	default:
 		h.logger.Error(logMessage, "error", err)

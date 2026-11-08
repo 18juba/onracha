@@ -127,3 +127,18 @@ func (s *Service) Join(ctx context.Context, gameID, userID int64) (Game, error) 
 	}
 	return updated, nil
 }
+
+// Leave removes the user from a game, except when the user is its organizer.
+func (s *Service) Leave(ctx context.Context, gameID, userID int64) error {
+	if gameID <= 0 {
+		return ErrInvalidGameID
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+
+	if err := s.games.Leave(ctx, gameID, userID); err != nil {
+		return fmt.Errorf("leave game: %w", err)
+	}
+	return nil
+}

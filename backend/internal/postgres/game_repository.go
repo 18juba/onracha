@@ -183,6 +183,42 @@ func (r *GameRepository) Join(ctx context.Context, gameID, userID int64) (game.G
 	return updated, nil
 }
 
+// Leave removes a participant while keeping the game's organizer enrolled.
+func (r *GameRepository) Leave(ctx context.Context, gameID, userID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin game exit: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := lockUser(ctx, tx, userID); err != nil {
+		return err
+	}
+
+	var organizerUserID int64
+	if err := tx.QueryRowContext(ctx,
+		"SELECT organizer_user_id FROM games WHERE id = $1 FOR UPDATE", gameID,
+	).Scan(&organizerUserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return game.ErrNotFound
+		}
+		return fmt.Errorf("lock game before participant exit: %w", err)
+	}
+	if organizerUserID == userID {
+		return game.ErrOrganizerCannotLeave
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM game_participants WHERE game_id = $1 AND user_id = $2", gameID, userID,
+	); err != nil {
+		return fmt.Errorf("remove game participant: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit game exit: %w", err)
+	}
+	return nil
+}
+
 func lockUser(ctx context.Context, tx *sql.Tx, userID int64) error {
 	var lockedID int64
 	if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&lockedID); err != nil {

@@ -16,6 +16,7 @@ var (
 	ErrTimeSlotUnavailable  = errors.New("time slot already has a game")
 	ErrUserTimeConflict     = errors.New("user already has a game at that time")
 	ErrAlreadyParticipating = errors.New("user already joined this game")
+	ErrOrganizerCannotLeave = errors.New("game organizer cannot leave the game")
 	ErrNotFound             = errors.New("game or time slot not found")
 )
 
