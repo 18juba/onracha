@@ -99,6 +99,19 @@ func (s *Service) ListByParticipant(ctx context.Context, userID int64) ([]Game, 
 	return values, nil
 }
 
+// GetByID returns one game with its participants.
+func (s *Service) GetByID(ctx context.Context, gameID int64) (Game, error) {
+	if gameID <= 0 {
+		return Game{}, ErrInvalidGameID
+	}
+
+	value, err := s.games.GetByID(ctx, gameID)
+	if err != nil {
+		return Game{}, fmt.Errorf("get game by ID: %w", err)
+	}
+	return value, nil
+}
+
 // Join adds a user to a game unless the user already has an overlapping game.
 func (s *Service) Join(ctx context.Context, gameID, userID int64) (Game, error) {
 	if gameID <= 0 {

@@ -15,5 +15,6 @@ type GameRepository interface {
 	Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (Game, error)
 	ListByArena(ctx context.Context, arenaID int64) ([]Game, error)
 	ListByParticipant(ctx context.Context, userID int64) ([]Game, error)
+	GetByID(ctx context.Context, gameID int64) (Game, error)
 	Join(ctx context.Context, gameID, userID int64) (Game, error)
 }

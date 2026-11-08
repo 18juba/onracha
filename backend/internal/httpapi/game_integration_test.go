@@ -276,6 +276,32 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		}
 	}
 
+	gameDetailsResponse := request(http.MethodGet, fmt.Sprintf("/api/v1/games/%d", firstGame.ID), nil, playerSession)
+	if gameDetailsResponse.Code != http.StatusOK {
+		t.Fatalf("get game details status = %d, want %d; body: %s", gameDetailsResponse.Code, http.StatusOK, gameDetailsResponse.Body.String())
+	}
+	var gameDetails game.Game
+	if err := json.Unmarshal(gameDetailsResponse.Body.Bytes(), &gameDetails); err != nil {
+		t.Fatalf("decode game details: %v", err)
+	}
+	if gameDetails.ID != firstGame.ID || gameDetails.ArenaID != arenas[0].ID || gameDetails.OrganizerUserID != users[1].ID || len(gameDetails.Participants) != 2 {
+		t.Errorf("game details = %+v, want game %d in arena %d with organizer %d and two participants", gameDetails, firstGame.ID, arenas[0].ID, users[1].ID)
+	}
+
+	missingGameResponse := request(http.MethodGet, "/api/v1/games/9223372036854775807", nil, playerSession)
+	if missingGameResponse.Code != http.StatusNotFound {
+		t.Errorf("missing game details status = %d, want %d", missingGameResponse.Code, http.StatusNotFound)
+	}
+	invalidGameIDResponse := request(http.MethodGet, "/api/v1/games/not-an-id", nil, playerSession)
+	if invalidGameIDResponse.Code != http.StatusBadRequest {
+		t.Errorf("invalid game ID status = %d, want %d", invalidGameIDResponse.Code, http.StatusBadRequest)
+	}
+
+	unauthenticatedGameDetails := request(http.MethodGet, fmt.Sprintf("/api/v1/games/%d", firstGame.ID), nil, nil)
+	if unauthenticatedGameDetails.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated game details status = %d, want %d", unauthenticatedGameDetails.Code, http.StatusUnauthorized)
+	}
+
 	unauthenticatedMyGames := request(http.MethodGet, "/api/v1/me/games", nil, nil)
 	if unauthenticatedMyGames.Code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated my games status = %d, want %d", unauthenticatedMyGames.Code, http.StatusUnauthorized)

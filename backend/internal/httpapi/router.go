@@ -41,6 +41,7 @@ type GameService interface {
 	Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (game.Game, error)
 	ListByArena(ctx context.Context, arenaID int64) ([]game.Game, error)
 	ListByParticipant(ctx context.Context, userID int64) ([]game.Game, error)
+	GetByID(ctx context.Context, gameID int64) (game.Game, error)
 	Join(ctx context.Context, gameID, userID int64) (game.Game, error)
 }
 
@@ -87,6 +88,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("GET /api/v1/arenas/{id}/time-slots", api.listAvailableTimeSlots)
 	mux.HandleFunc("GET /api/v1/arenas/{id}/games", api.listGamesByArena)
 	mux.HandleFunc("GET /api/v1/me/games", api.listMyGames)
+	mux.HandleFunc("GET /api/v1/games/{id}", api.getGame)
 	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
 	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
 
@@ -420,6 +422,25 @@ func (h *handler) listMyGames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, values)
+}
+
+func (h *handler) getGame(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+
+	gameID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+		return
+	}
+
+	value, err := h.gameService.GetByID(r.Context(), gameID)
+	if err != nil {
+		h.writeGameError(w, err, "game lookup failed", "Não foi possível consultar o jogo.")
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
 }
 
 func (h *handler) joinGame(w http.ResponseWriter, r *http.Request) {

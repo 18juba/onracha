@@ -285,6 +285,41 @@ func TestServiceListByParticipantReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceGetByIDReturnsGame(t *testing.T) {
+	want := Game{ID: 31, ArenaID: 23, Participants: []int64{17, 22}}
+	repository := &fakeGameRepository{gameByID: want}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	got, err := service.GetByID(context.Background(), 31)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v, want nil", err)
+	}
+	if repository.getByIDCalls != 1 || repository.requestedGameID != 31 || got.ID != want.ID || len(got.Participants) != 2 {
+		t.Errorf("GetByID() = %+v; repository calls=%d requested ID=%d, want %+v", got, repository.getByIDCalls, repository.requestedGameID, want)
+	}
+}
+
+func TestServiceGetByIDRejectsInvalidID(t *testing.T) {
+	repository := &fakeGameRepository{}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	if _, err := service.GetByID(context.Background(), 0); !errors.Is(err, ErrInvalidGameID) {
+		t.Fatalf("GetByID() error = %v, want %v", err, ErrInvalidGameID)
+	}
+	if repository.getByIDCalls != 0 {
+		t.Errorf("repository calls = %d, want 0", repository.getByIDCalls)
+	}
+}
+
+func TestServiceGetByIDReturnsRepositoryError(t *testing.T) {
+	wantErr := ErrNotFound
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{getByIDError: wantErr})
+
+	if _, err := service.GetByID(context.Background(), 31); !errors.Is(err, wantErr) {
+		t.Fatalf("GetByID() error = %v, want wrapped error %v", err, wantErr)
+	}
+}
+
 func TestServiceJoinPassesGameAndUser(t *testing.T) {
 	want := Game{ID: 31, Participants: []int64{17, 22}}
 	repository := &fakeGameRepository{joinedGame: want}
@@ -381,6 +416,10 @@ type fakeGameRepository struct {
 	participantUserID    int64
 	participantGames     []Game
 	participantListError error
+	getByIDCalls         int
+	requestedGameID      int64
+	gameByID             Game
+	getByIDError         error
 }
 
 func (r *fakeGameRepository) Schedule(_ context.Context, slotID, organizerUserID int64) (Game, error) {
@@ -403,6 +442,12 @@ func (r *fakeGameRepository) ListByParticipant(_ context.Context, userID int64) 
 	r.participantListCalls++
 	r.participantUserID = userID
 	return r.participantGames, r.participantListError
+}
+
+func (r *fakeGameRepository) GetByID(_ context.Context, gameID int64) (Game, error) {
+	r.getByIDCalls++
+	r.requestedGameID = gameID
+	return r.gameByID, r.getByIDError
 }
 
 func (r *fakeGameRepository) Join(_ context.Context, gameID, userID int64) (Game, error) {

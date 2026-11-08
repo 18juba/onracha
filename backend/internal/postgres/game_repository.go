@@ -118,6 +118,11 @@ func (r *GameRepository) ListByParticipant(ctx context.Context, userID int64) ([
 	return scanGames(ctx, r.db, query, userID)
 }
 
+// GetByID returns a game with its participant IDs.
+func (r *GameRepository) GetByID(ctx context.Context, gameID int64) (game.Game, error) {
+	return loadGame(ctx, r.db, gameID)
+}
+
 // Join enrolls the user when no other game overlaps the requested interval.
 func (r *GameRepository) Join(ctx context.Context, gameID, userID int64) (game.Game, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -208,7 +213,7 @@ func userHasOverlappingGame(ctx context.Context, tx *sql.Tx, userID int64, start
 	return conflict, nil
 }
 
-func loadGame(ctx context.Context, tx *sql.Tx, gameID int64) (game.Game, error) {
+func loadGame(ctx context.Context, queryer gameQueryer, gameID int64) (game.Game, error) {
 	const query = `
 		SELECT g.id, g.time_slot_id, slot.arena_id, g.organizer_user_id,
 		       slot.starts_at, slot.ends_at, g.created_at, participant.user_id
@@ -217,7 +222,7 @@ func loadGame(ctx context.Context, tx *sql.Tx, gameID int64) (game.Game, error) 
 		LEFT JOIN game_participants AS participant ON participant.game_id = g.id
 		WHERE g.id = $1
 		ORDER BY participant.user_id`
-	values, err := scanGames(ctx, tx, query, gameID)
+	values, err := scanGames(ctx, queryer, query, gameID)
 	if err != nil {
 		return game.Game{}, fmt.Errorf("load game: %w", err)
 	}
