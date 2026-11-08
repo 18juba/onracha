@@ -1,22 +1,93 @@
 package main
 
 import (
-	"encoding/json"
-	"log"
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+
+	"onracha/internal/auth"
+	"onracha/internal/httpapi"
+	"onracha/internal/postgres"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if err := json.NewEncoder(w).Encode(map[string]string{
-			"message": "Hello, World!",
-		}); err != nil {
-			log.Printf("write hello response: %v", err)
-		}
-	})
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := run(logger); err != nil {
+		logger.Error("api stopped", "error", err)
+		os.Exit(1)
+	}
+}
 
-	log.Println("ONRACHA API listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+func run(logger *slog.Logger) error {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return errors.New("DATABASE_URL is required")
+	}
+
+	database, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return fmt.Errorf("open database connection: %w", err)
+	}
+	defer database.Close()
+
+	startupContext, cancelStartup := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelStartup()
+	if err := database.PingContext(startupContext); err != nil {
+		return fmt.Errorf("connect to database: %w", err)
+	}
+
+	secureCookies, err := envBool("SESSION_COOKIE_SECURE", false)
+	if err != nil {
+		return err
+	}
+	frontendOrigin := os.Getenv("FRONTEND_ORIGIN")
+	if frontendOrigin == "" {
+		frontendOrigin = "http://localhost:5173"
+	}
+
+	authService := auth.NewService(postgres.NewRepository(database), auth.NewArgon2idHasher())
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           httpapi.NewRouter(authService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies}),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	shutdownContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-shutdownContext.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			logger.Error("graceful shutdown failed", "error", err)
+		}
+	}()
+
+	logger.Info("api listening", "address", server.Addr)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("serve HTTP: %w", err)
+	}
+	return nil
+}
+
+func envBool(name string, fallback bool) (bool, error) {
+	value, exists := os.LookupEnv(name)
+	if !exists || value == "" {
+		return fallback, nil
+	}
+	parsedValue, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", name, err)
+	}
+	return parsedValue, nil
 }

@@ -18,14 +18,33 @@ services:
       retries: 5
       start_period: 5s
 
+  migrate:
+    image: migrate/migrate:v4.20.1
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${POSTGRES_USER:-onracha}:${POSTGRES_PASSWORD:-onracha}@db:5432/${POSTGRES_DB:-onracha}?sslmode=disable"
+      - up
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
   backend:
     image: golang:1.27.3-alpine
     working_dir: /app
     command: go run .
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-onracha}:${POSTGRES_PASSWORD:-onracha}@db:5432/${POSTGRES_DB:-onracha}?sslmode=disable
+      FRONTEND_ORIGIN: http://localhost:5173
+      SESSION_COOKIE_SECURE: "false"
     volumes:
       - ./backend:/app
     ports:
       - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     image: oven/bun:1.4.4

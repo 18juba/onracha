@@ -1,22 +1,36 @@
-## Requisito
+## Executar com Docker Compose
 
-- Go 1.27.3, conforme declarado em `go.mod`.
-
-## Executar localmente
-
-A partir da raiz do repositório:
+Na raiz do repositório:
 
 ```bash
-cd backend
-go run .
+docker compose up
 ```
 
-A API fica disponível em <http://localhost:8080>. A rota `GET /` retorna uma mensagem JSON.
+O Compose inicia o PostgreSQL, aplica as migrations pendentes e inicia a API. Endereços locais:
 
-## Testes
+- API: <http://localhost:8080>
+- Verificação de saúde: <http://localhost:8080/health>
+- Especificação OpenAPI: `docs/openapi.yaml`
 
-Para executar os testes do backend:
+## Executar testes
+
+Os testes de domínio não precisam de banco. Na raiz:
 
 ```bash
-go test ./...
+docker compose run --rm --no-deps -e DATABASE_URL= backend go test ./internal/auth/...
+```
+
+O teste de integração usa PostgreSQL.
+
+```bash
+docker compose run --rm backend go test ./...
+```
+
+## Verificações do backend
+
+Na raiz do repositório:
+
+```bash
+docker compose run --rm --no-deps backend go vet ./...
+docker compose run --rm --no-deps backend go build ./...
 ```

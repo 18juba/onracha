@@ -23,7 +23,7 @@ Em correções de defeitos, primeiro crie um teste que reproduza o problema. Man
 - Testes unitários do domínio devem cobrir regras e resultados relevantes sem iniciar servidor ou banco de dados.
 - Testes de integração devem verificar que componentes reais funcionam juntos em uma fronteira importante, como roteamento e resposta HTTP. Para HTTP, prefira `net/http/httptest`.
 - Use nomes de testes que expliquem o cenário e o resultado esperado.
-- O objetivo mínimo de cobertura é **80% nos pacotes de domínio**. A CI atual ainda não mede nem bloqueia por esse limite, pois o backend está no scaffold inicial. Ao introduzir o primeiro pacote de domínio, adicione a verificação à CI e mantenha o limite aplicado. Cobertura complementa os testes de comportamento; não substitui bons cenários.
+- O mínimo é **80% de cobertura nos pacotes de domínio**. A CI aplica esse limite a `internal/auth`; ao adicionar outros pacotes de domínio, inclua-os na verificação. Cobertura complementa os testes de comportamento; não substitui bons cenários.
 
 ### Logs estruturados
 
@@ -61,6 +61,25 @@ Para mudanças em Svelte ou SvelteKit, siga também as instruções de `frontend
 
 ## Executar a aplicação
 
+Na raiz do repositório, use Docker Compose. O serviço `migrate` aplica as migrations depois que o PostgreSQL fica saudável e antes de iniciar a API:
+
+```bash
+docker compose up
+```
+
+Para executar apenas os testes de domínio sem banco:
+
+```bash
+docker compose run --rm --no-deps -e DATABASE_URL= backend go test ./internal/auth/...
+```
+
+Para executar também o teste de integração com PostgreSQL:
+
+```bash
+docker compose run --rm backend go test ./...
+```
+
+Atualize `docs/openapi.yaml` quando alterar os endpoints públicos e registre decisões arquiteturais relevantes em `docs/adr/`.
 
 ## Mensagens de commit
 

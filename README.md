@@ -20,16 +20,18 @@ flowchart LR
 
 ## Executar com Docker Compose
 
+Copie `.env.example` para `.env` se quiser personalizar os valores locais. Os valores padrão são apenas para desenvolvimento e não devem ser usados em produção.
+
 Na raiz do repositório, execute:
 
 ```bash
 docker compose up
 ```
 
-O Compose inicia os três serviços:
+O Compose inicia PostgreSQL, aplica migrations pendentes, inicia a API e inicia o frontend:
 
 - Frontend: <http://localhost:5173>
-- Backend: <http://localhost:8080>
+- API: <http://localhost:8080>
 - PostgreSQL: `localhost:5432`
 
 Para encerrar, pressione `Ctrl+C`. Se os serviços foram iniciados em segundo plano, use:
@@ -37,3 +39,11 @@ Para encerrar, pressione `Ctrl+C`. Se os serviços foram iniciados em segundo pl
 ```bash
 docker compose down
 ```
+
+O volume `postgres_data` mantém os dados locais. `docker compose down -v` também apaga esse volume.
+
+## Documentação
+
+- [Backend e testes](backend/README.md)
+- [Guia de contribuição e TDD](CONTRIBUTING.md)
+- [ADR](docs/adr)

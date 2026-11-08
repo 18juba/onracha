@@ -1,0 +1,190 @@
+openapi: 3.1.0
+info:
+  title: ONRACHA API
+  version: 0.1.0
+  description: API inicial do ONRACHA com cadastro e autenticação de contas.
+servers:
+  - url: http://localhost:8080
+    description: Ambiente local via Docker Compose
+paths:
+  /health:
+    get:
+      summary: Verifica se a API está respondendo
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API disponível
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /api/v1/auth/register:
+    post:
+      summary: Cria uma conta
+      operationId: registerAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  example: Lucas Oliveira
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                  example: lucas@example.com
+                password:
+                  type: string
+                  minLength: 15
+                  maxLength: 128
+                  description: Senha em forma de frase; espaços e caracteres Unicode são aceitos.
+      responses:
+        '201':
+          description: Conta criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email já cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/auth/login:
+    post:
+      summary: Inicia uma sessão
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: lucas@example.com
+                password:
+                  type: string
+                  minLength: 15
+                  maxLength: 128
+      responses:
+        '200':
+          description: Sessão iniciada; token retornado em cookie HttpOnly
+          headers:
+            Set-Cookie:
+              description: Cookie de sessão com validade de 24 horas.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Corpo JSON inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Email ou senha inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/auth/me:
+    get:
+      summary: Retorna a conta da sessão atual
+      operationId: currentAccount
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Conta autenticada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: onracha_session
+  schemas:
+    User:
+      type: object
+      required: [id, name, email, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: Lucas Oliveira
+        email:
+          type: string
+          format: email
+          example: lucas@example.com
+        created_at:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: invalid_input
+            message:
+              type: string
+              example: Confira nome, email e senha.
