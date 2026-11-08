@@ -32,6 +32,8 @@ O Compose inicia PostgreSQL, aplica migrations pendentes, inicia a API e inicia 
 
 - Frontend: <http://localhost:5173>
 - API: <http://localhost:8080>
+- Swagger UI: <http://localhost:8080/swagger>
+- OpenAPI: <http://localhost:8080/openapi.yaml>
 - PostgreSQL: `localhost:5432`
 
 Para encerrar, pressione `Ctrl+C`. Se os serviços foram iniciados em segundo plano, use:
@@ -46,4 +48,5 @@ O volume `postgres_data` mantém os dados locais. `docker compose down -v` tamb�
 
 - [Backend e testes](backend/README.md)
 - [Guia de contribuição e TDD](CONTRIBUTING.md)
+- [Especificação OpenAPI](docs/openapi.yaml)
 - [ADR](docs/adr)

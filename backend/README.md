@@ -10,7 +10,8 @@ O Compose inicia o PostgreSQL, aplica as migrations pendentes e inicia a API. En
 
 - API: <http://localhost:8080>
 - Verificação de saúde: <http://localhost:8080/health>
-- Especificação OpenAPI: `docs/openapi.yaml`
+- Documentação interativa Swagger UI: <http://localhost:8080/swagger>
+- Especificação OpenAPI: <http://localhost:8080/openapi.yaml> (`docs/openapi.yaml` no repositório)
 
 ## Executar testes
 

@@ -51,6 +51,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	frontendOrigin := os.Getenv("FRONTEND_ORIGIN")
+	openAPISpecPath := os.Getenv("OPENAPI_SPEC_PATH")
 	if frontendOrigin == "" {
 		frontendOrigin = "http://localhost:5173"
 	}
@@ -58,7 +59,7 @@ func run(logger *slog.Logger) error {
 	authService := auth.NewService(postgres.NewRepository(database), auth.NewArgon2idHasher())
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           httpapi.NewRouter(authService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies}),
+		Handler:           httpapi.NewRouter(authService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies, OpenAPISpecPath: openAPISpecPath}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

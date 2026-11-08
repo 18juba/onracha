@@ -24,8 +24,9 @@ type AuthService interface {
 
 // Config contains browser-facing HTTP settings for the API.
 type Config struct {
-	AllowedOrigin string
-	SecureCookies bool
+	AllowedOrigin   string
+	SecureCookies   bool
+	OpenAPISpecPath string
 }
 
 type handler struct {
@@ -40,9 +41,16 @@ func NewRouter(authService AuthService, logger *slog.Logger, config Config) http
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
 
+	if config.OpenAPISpecPath == "" {
+		config.OpenAPISpecPath = "../docs/openapi.yaml"
+	}
+
 	api := &handler{authService: authService, logger: logger, config: config}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", api.health)
+	mux.HandleFunc("GET /openapi.yaml", api.openAPISpec)
+	mux.HandleFunc("GET /swagger", api.swaggerUI)
+	mux.HandleFunc("GET /swagger/", api.swaggerUI)
 	mux.HandleFunc("POST /api/v1/auth/register", api.register)
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
@@ -171,7 +179,7 @@ func (h *handler) requestLogger(next http.Handler) http.Handler {
 func requestRoute(r *http.Request) string {
 	route := r.Method + " " + r.URL.Path
 	switch route {
-	case "GET /health", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me":
+	case "GET /health", "GET /openapi.yaml", "GET /swagger", "GET /swagger/", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me":
 		return route
 	default:
 		return "unmatched"

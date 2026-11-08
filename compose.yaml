@@ -38,8 +38,10 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-onracha}:${POSTGRES_PASSWORD:-onracha}@db:5432/${POSTGRES_DB:-onracha}?sslmode=disable
       FRONTEND_ORIGIN: http://localhost:5173
       SESSION_COOKIE_SECURE: "false"
+      OPENAPI_SPEC_PATH: /docs/openapi.yaml
     volumes:
       - ./backend:/app
+      - ./docs:/docs:ro
     ports:
       - "8080:8080"
     depends_on:
