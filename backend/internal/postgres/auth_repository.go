@@ -11,18 +11,18 @@ import (
 	"onracha/internal/auth"
 )
 
-// Repository stores authentication data in PostgreSQL.
-type Repository struct {
+// AuthRepository stores authentication data in PostgreSQL.
+type AuthRepository struct {
 	db *sql.DB
 }
 
-// NewRepository creates a PostgreSQL repository backed by an existing connection pool.
-func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+// NewAuthRepository creates a PostgreSQL authentication repository backed by an existing connection pool.
+func NewAuthRepository(db *sql.DB) *AuthRepository {
+	return &AuthRepository{db: db}
 }
 
 // CreateUser persists a public user profile and its password hash.
-func (r *Repository) CreateUser(ctx context.Context, user auth.User, passwordHash string) (auth.User, error) {
+func (r *AuthRepository) CreateUser(ctx context.Context, user auth.User, passwordHash string) (auth.User, error) {
 	const query = `INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, created_at`
 	err := r.db.QueryRowContext(ctx, query, user.Name, user.Email, passwordHash).
 		Scan(&user.ID, &user.Name, &user.Email, &user.CreatedAt)
@@ -37,7 +37,7 @@ func (r *Repository) CreateUser(ctx context.Context, user auth.User, passwordHas
 }
 
 // FindUserByEmail returns a public profile and its password hash for credential verification.
-func (r *Repository) FindUserByEmail(ctx context.Context, email string) (auth.User, string, error) {
+func (r *AuthRepository) FindUserByEmail(ctx context.Context, email string) (auth.User, string, error) {
 	const query = `SELECT id, name, email, created_at, password_hash FROM users WHERE email = $1`
 	var user auth.User
 	var passwordHash string
@@ -53,7 +53,7 @@ func (r *Repository) FindUserByEmail(ctx context.Context, email string) (auth.Us
 }
 
 // CreateSession stores only the hash of an opaque session token.
-func (r *Repository) CreateSession(ctx context.Context, userID int64, tokenHash []byte, expiresAt time.Time) error {
+func (r *AuthRepository) CreateSession(ctx context.Context, userID int64, tokenHash []byte, expiresAt time.Time) error {
 	const query = `INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`
 	if _, err := r.db.ExecContext(ctx, query, tokenHash, userID, expiresAt); err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -62,7 +62,7 @@ func (r *Repository) CreateSession(ctx context.Context, userID int64, tokenHash 
 }
 
 // FindUserBySession resolves an unexpired session hash to its account.
-func (r *Repository) FindUserBySession(ctx context.Context, tokenHash []byte, now time.Time) (auth.User, error) {
+func (r *AuthRepository) FindUserBySession(ctx context.Context, tokenHash []byte, now time.Time) (auth.User, error) {
 	const query = `
 		SELECT users.id, users.name, users.email, users.created_at
 		FROM sessions

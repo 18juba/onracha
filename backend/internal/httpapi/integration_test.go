@@ -47,7 +47,7 @@ func TestPostgreSQLRegistrationLoginAndCurrentAccount(t *testing.T) {
 		}
 	})
 
-	service := auth.NewService(postgres.NewRepository(database), auth.NewArgon2idHasher())
+	service := auth.NewService(postgres.NewAuthRepository(database), auth.NewArgon2idHasher())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	api := NewRouter(service, logger, Config{AllowedOrigin: "http://localhost:5173"})
 

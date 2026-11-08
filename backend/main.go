@@ -56,7 +56,7 @@ func run(logger *slog.Logger) error {
 		frontendOrigin = "http://localhost:5173"
 	}
 
-	authService := auth.NewService(postgres.NewRepository(database), auth.NewArgon2idHasher())
+	authService := auth.NewService(postgres.NewAuthRepository(database), auth.NewArgon2idHasher())
 	server := &http.Server{
 		Addr:              ":8080",
 		Handler:           httpapi.NewRouter(authService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies, OpenAPISpecPath: openAPISpecPath}),
