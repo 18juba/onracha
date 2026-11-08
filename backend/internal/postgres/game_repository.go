@@ -100,6 +100,24 @@ func (r *GameRepository) ListByArena(ctx context.Context, arenaID int64) ([]game
 	return scanGames(ctx, r.db, query, arenaID)
 }
 
+// ListByParticipant returns future games the user is enrolled in, chronologically.
+func (r *GameRepository) ListByParticipant(ctx context.Context, userID int64) ([]game.Game, error) {
+	const query = `
+		SELECT g.id, g.time_slot_id, slot.arena_id, g.organizer_user_id,
+		       slot.starts_at, slot.ends_at, g.created_at, participant.user_id
+		FROM games AS g
+		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
+		LEFT JOIN game_participants AS participant ON participant.game_id = g.id
+		WHERE EXISTS (
+			SELECT 1 FROM game_participants AS membership
+			WHERE membership.game_id = g.id AND membership.user_id = $1
+		  )
+		  AND slot.starts_at > NOW()
+		ORDER BY slot.starts_at, g.id, participant.user_id`
+
+	return scanGames(ctx, r.db, query, userID)
+}
+
 // Join enrolls the user when no other game overlaps the requested interval.
 func (r *GameRepository) Join(ctx context.Context, gameID, userID int64) (game.Game, error) {
 	tx, err := r.db.BeginTx(ctx, nil)

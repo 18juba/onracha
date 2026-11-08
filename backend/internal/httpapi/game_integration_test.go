@@ -255,4 +255,29 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	if len(listedGames) != 2 {
 		t.Fatalf("listed games = %d, want 2", len(listedGames))
 	}
+
+	myGamesResponse := request(http.MethodGet, "/api/v1/me/games", nil, playerSession)
+	if myGamesResponse.Code != http.StatusOK {
+		t.Fatalf("list my games status = %d, want %d; body: %s", myGamesResponse.Code, http.StatusOK, myGamesResponse.Body.String())
+	}
+	var myGames []game.Game
+	if err := json.Unmarshal(myGamesResponse.Body.Bytes(), &myGames); err != nil {
+		t.Fatalf("decode my games: %v", err)
+	}
+	if len(myGames) != 2 {
+		t.Fatalf("my games = %d, want 2", len(myGames))
+	}
+	if myGames[0].ID != firstGame.ID || myGames[1].ID != secondGame.ID {
+		t.Errorf("my game IDs = [%d, %d], want chronological order [%d, %d]", myGames[0].ID, myGames[1].ID, firstGame.ID, secondGame.ID)
+	}
+	for _, value := range myGames {
+		if value.ArenaID != arenas[0].ID || len(value.Participants) != 2 {
+			t.Errorf("my game = %+v, want arena %d and both participants", value, arenas[0].ID)
+		}
+	}
+
+	unauthenticatedMyGames := request(http.MethodGet, "/api/v1/me/games", nil, nil)
+	if unauthenticatedMyGames.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated my games status = %d, want %d", unauthenticatedMyGames.Code, http.StatusUnauthorized)
+	}
 }

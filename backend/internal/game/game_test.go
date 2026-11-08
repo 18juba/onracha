@@ -238,6 +238,53 @@ func TestServiceListByArenaReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceListByParticipantReturnsRepositoryGames(t *testing.T) {
+	want := []Game{{ID: 31, OrganizerUserID: 17}}
+	repository := &fakeGameRepository{participantGames: want}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	got, err := service.ListByParticipant(context.Background(), 22)
+	if err != nil {
+		t.Fatalf("ListByParticipant() error = %v, want nil", err)
+	}
+	if repository.participantListCalls != 1 || repository.participantUserID != 22 || len(got) != 1 || got[0].ID != want[0].ID {
+		t.Errorf("ListByParticipant() = %+v; repository calls=%d user=%d, want games %+v", got, repository.participantListCalls, repository.participantUserID, want)
+	}
+}
+
+func TestServiceListByParticipantReturnsEmptySlice(t *testing.T) {
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{})
+
+	got, err := service.ListByParticipant(context.Background(), 22)
+	if err != nil {
+		t.Fatalf("ListByParticipant() error = %v, want nil", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("ListByParticipant() = %+v, want non-nil empty slice", got)
+	}
+}
+
+func TestServiceListByParticipantRejectsInvalidUserID(t *testing.T) {
+	repository := &fakeGameRepository{}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	if _, err := service.ListByParticipant(context.Background(), 0); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("ListByParticipant() error = %v, want %v", err, ErrInvalidUserID)
+	}
+	if repository.participantListCalls != 0 {
+		t.Errorf("repository calls = %d, want 0", repository.participantListCalls)
+	}
+}
+
+func TestServiceListByParticipantReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{participantListError: wantErr})
+
+	if _, err := service.ListByParticipant(context.Background(), 22); !errors.Is(err, wantErr) {
+		t.Fatalf("ListByParticipant() error = %v, want wrapped error %v", err, wantErr)
+	}
+}
+
 func TestServiceJoinPassesGameAndUser(t *testing.T) {
 	want := Game{ID: 31, Participants: []int64{17, 22}}
 	repository := &fakeGameRepository{joinedGame: want}
@@ -317,19 +364,23 @@ func (r *fakeTimeSlotRepository) ListAvailableByArena(_ context.Context, arenaID
 }
 
 type fakeGameRepository struct {
-	scheduledGame Game
-	scheduleCalls int
-	slotID        int64
-	userID        int64
-	scheduleError error
-	joinedGame    Game
-	joinCalls     int
-	gameID        int64
-	joinError     error
-	listCalls     int
-	listedArenaID int64
-	listedGames   []Game
-	listError     error
+	scheduledGame        Game
+	scheduleCalls        int
+	slotID               int64
+	userID               int64
+	scheduleError        error
+	joinedGame           Game
+	joinCalls            int
+	gameID               int64
+	joinError            error
+	listCalls            int
+	listedArenaID        int64
+	listedGames          []Game
+	listError            error
+	participantListCalls int
+	participantUserID    int64
+	participantGames     []Game
+	participantListError error
 }
 
 func (r *fakeGameRepository) Schedule(_ context.Context, slotID, organizerUserID int64) (Game, error) {
@@ -346,6 +397,12 @@ func (r *fakeGameRepository) ListByArena(_ context.Context, arenaID int64) ([]Ga
 	r.listCalls++
 	r.listedArenaID = arenaID
 	return r.listedGames, r.listError
+}
+
+func (r *fakeGameRepository) ListByParticipant(_ context.Context, userID int64) ([]Game, error) {
+	r.participantListCalls++
+	r.participantUserID = userID
+	return r.participantGames, r.participantListError
 }
 
 func (r *fakeGameRepository) Join(_ context.Context, gameID, userID int64) (Game, error) {

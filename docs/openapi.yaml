@@ -550,6 +550,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/me/games:
+    get:
+      summary: Lista os próximos jogos da conta autenticada
+      description: Retorna os jogos futuros em que a conta participa, incluindo os jogos que organizou, em ordem cronológica.
+      operationId: listMyGames
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Jogos futuros da conta autenticada
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Game'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/time-slots/{id}/games:
     post:
       summary: Agenda um jogo em um horário disponível

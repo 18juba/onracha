@@ -40,6 +40,7 @@ type GameService interface {
 	ListAvailableTimeSlots(ctx context.Context, arenaID int64) ([]game.TimeSlot, error)
 	Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (game.Game, error)
 	ListByArena(ctx context.Context, arenaID int64) ([]game.Game, error)
+	ListByParticipant(ctx context.Context, userID int64) ([]game.Game, error)
 	Join(ctx context.Context, gameID, userID int64) (game.Game, error)
 }
 
@@ -85,6 +86,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("POST /api/v1/arenas/{id}/time-slots", api.createTimeSlot)
 	mux.HandleFunc("GET /api/v1/arenas/{id}/time-slots", api.listAvailableTimeSlots)
 	mux.HandleFunc("GET /api/v1/arenas/{id}/games", api.listGamesByArena)
+	mux.HandleFunc("GET /api/v1/me/games", api.listMyGames)
 	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
 	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
 
@@ -400,6 +402,21 @@ func (h *handler) listGamesByArena(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("game listing failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível consultar os jogos.")
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
+}
+
+func (h *handler) listMyGames(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	values, err := h.gameService.ListByParticipant(r.Context(), user.ID)
+	if err != nil {
+		h.logger.Error("current user game listing failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível consultar seus jogos.")
 		return
 	}
 	writeJSON(w, http.StatusOK, values)

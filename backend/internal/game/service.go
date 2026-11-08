@@ -83,6 +83,22 @@ func (s *Service) ListByArena(ctx context.Context, arenaID int64) ([]Game, error
 	return values, nil
 }
 
+// ListByParticipant returns future games in which the user is enrolled.
+func (s *Service) ListByParticipant(ctx context.Context, userID int64) ([]Game, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidUserID
+	}
+
+	values, err := s.games.ListByParticipant(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list games by participant: %w", err)
+	}
+	if values == nil {
+		values = []Game{}
+	}
+	return values, nil
+}
+
 // Join adds a user to a game unless the user already has an overlapping game.
 func (s *Service) Join(ctx context.Context, gameID, userID int64) (Game, error) {
 	if gameID <= 0 {
