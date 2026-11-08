@@ -7,12 +7,14 @@ import (
 	"testing"
 )
 
-func TestCORSAllowsArenaUpdateMethods(t *testing.T) {
+func TestCORSAllowsFrontendAPIMethods(t *testing.T) {
 	api := NewRouter(nil, nil, nil, nil, Config{AllowedOrigin: "http://localhost:5173"})
-	for _, method := range []string{http.MethodPut, http.MethodPatch} {
+	for _, method := range []string{http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		path := "/api/v1/arenas/1"
 		if method == http.MethodPatch {
 			path += "/active"
+		} else if method == http.MethodDelete {
+			path = "/api/v1/games/1/participants/me"
 		}
 		request := httptest.NewRequest(http.MethodOptions, path, nil)
 		request.Header.Set("Origin", "http://localhost:5173")
