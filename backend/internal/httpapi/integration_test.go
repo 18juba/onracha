@@ -51,7 +51,7 @@ func TestPostgreSQLRegistrationLoginAndCurrentAccount(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	api := NewRouter(service, logger, Config{AllowedOrigin: "http://localhost:5173"})
 
-	registerRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Integration Player","email":"`+email+`","password":"uma senha segura para teste"}`))
+	registerRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Integration Player","email":"`+email+`","password":"Senha123"}`))
 	registerRequest.Header.Set("Content-Type", "application/json")
 	registerResponse := httptest.NewRecorder()
 	api.ServeHTTP(registerResponse, registerRequest)
@@ -69,7 +69,7 @@ func TestPostgreSQLRegistrationLoginAndCurrentAccount(t *testing.T) {
 		t.Fatal("registration response must not expose password hash")
 	}
 
-	duplicateRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Another Player","email":"`+email+`","password":"uma senha segura para teste"}`))
+	duplicateRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Another Player","email":"`+email+`","password":"Senha123"}`))
 	duplicateRequest.Header.Set("Content-Type", "application/json")
 	duplicateResponse := httptest.NewRecorder()
 	api.ServeHTTP(duplicateResponse, duplicateRequest)
@@ -77,7 +77,7 @@ func TestPostgreSQLRegistrationLoginAndCurrentAccount(t *testing.T) {
 		t.Fatalf("duplicate registration status = %d, want %d", duplicateResponse.Code, http.StatusConflict)
 	}
 
-	loginRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"email":"`+email+`","password":"uma senha segura para teste"}`))
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"email":"`+email+`","password":"Senha123"}`))
 	loginRequest.Header.Set("Content-Type", "application/json")
 	loginResponse := httptest.NewRecorder()
 	api.ServeHTTP(loginResponse, loginRequest)

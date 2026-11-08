@@ -46,7 +46,7 @@ paths:
                   example: lucas@example.com
                 password:
                   type: string
-                  minLength: 15
+                  minLength: 8
                   maxLength: 128
                   description: Senha em forma de frase; espaços e caracteres Unicode são aceitos.
       responses:
@@ -92,7 +92,7 @@ paths:
                   example: lucas@example.com
                 password:
                   type: string
-                  minLength: 15
+                  minLength: 8
                   maxLength: 128
       responses:
         '200':

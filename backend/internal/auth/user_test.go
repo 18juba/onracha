@@ -55,6 +55,11 @@ func TestValidatePasswordRequiresAtLeastMinimumLength(t *testing.T) {
 	}
 }
 
+func TestValidatePasswordAcceptsEightCharacters(t *testing.T) {
+	if err := ValidatePassword("12345678"); err != nil {
+		t.Fatalf("ValidatePassword() error = %v, want nil for an 8-character password", err)
+	}
+}
 func TestValidatePasswordRejectsPasswordAboveMaximumLength(t *testing.T) {
 	password := strings.Repeat("a", MaximumPasswordLength+1)
 	if err := ValidatePassword(password); !errors.Is(err, ErrPasswordTooLong) {

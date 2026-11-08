@@ -10,7 +10,7 @@ import (
 
 const (
 	// MinimumPasswordLength is the minimum number of Unicode characters in a password.
-	MinimumPasswordLength = 15
+	MinimumPasswordLength = 8
 	// MaximumPasswordLength limits password input while allowing long passphrases.
 	MaximumPasswordLength = 128
 )
