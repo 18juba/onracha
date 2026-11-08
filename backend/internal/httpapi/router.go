@@ -23,9 +23,10 @@ type AuthService interface {
 	Authenticate(ctx context.Context, token string) (auth.User, error)
 }
 
-// ArenaService describes arena registration operations exposed over HTTP.
+// ArenaService describes arena operations exposed over HTTP.
 type ArenaService interface {
 	Create(ctx context.Context, ownerUserID int64, details arena.Details) (arena.Arena, error)
+	ListByOwner(ctx context.Context, ownerUserID int64) ([]arena.Arena, error)
 }
 
 // Config contains browser-facing HTTP settings for the API.
@@ -61,6 +62,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, logger *slog.
 	mux.HandleFunc("POST /api/v1/auth/register", api.register)
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
+	mux.HandleFunc("GET /api/v1/arenas", api.listArenas)
 	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
 
 	return api.cors(api.requestLogger(mux))
@@ -139,6 +141,21 @@ func (h *handler) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
+func (h *handler) listArenas(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenas, err := h.arenaService.ListByOwner(r.Context(), user.ID)
+	if err != nil {
+		h.logger.Error("arena listing failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível listar as arenas.")
+		return
+	}
+	writeJSON(w, http.StatusOK, arenas)
+}
+
 func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.authenticatedUser(w, r)
 	if !ok {
@@ -198,6 +215,7 @@ func (h *handler) authenticatedUser(w http.ResponseWriter, r *http.Request) (aut
 	}
 	return user, true
 }
+
 func (h *handler) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -233,7 +251,7 @@ func (h *handler) requestLogger(next http.Handler) http.Handler {
 func requestRoute(r *http.Request) string {
 	route := r.Method + " " + r.URL.Path
 	switch route {
-	case "GET /health", "GET /openapi.yaml", "GET /swagger", "GET /swagger/", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me", "POST /api/v1/arenas":
+	case "GET /health", "GET /openapi.yaml", "GET /swagger", "GET /swagger/", "POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/auth/me", "GET /api/v1/arenas", "POST /api/v1/arenas":
 		return route
 	default:
 		return "unmatched"

@@ -36,3 +36,40 @@ func (r *ArenaRepository) Create(ctx context.Context, value arena.Arena) (arena.
 	}
 	return value, nil
 }
+
+// ListByOwner returns arenas for one owner, newest first.
+func (r *ArenaRepository) ListByOwner(ctx context.Context, ownerUserID int64) ([]arena.Arena, error) {
+	const query = `
+		SELECT id, owner_user_id, name, arena_type, address, city, state, created_at
+		FROM arenas
+		WHERE owner_user_id = $1
+		ORDER BY created_at DESC, id DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("query arenas by owner: %w", err)
+	}
+	defer rows.Close()
+
+	arenas := make([]arena.Arena, 0)
+	for rows.Next() {
+		var value arena.Arena
+		if err := rows.Scan(
+			&value.ID,
+			&value.OwnerUserID,
+			&value.Name,
+			&value.ArenaType,
+			&value.Address,
+			&value.City,
+			&value.State,
+			&value.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan arena: %w", err)
+		}
+		arenas = append(arenas, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate arenas: %w", err)
+	}
+	return arenas, nil
+}

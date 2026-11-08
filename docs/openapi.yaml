@@ -150,6 +150,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/arenas:
+    get:
+      summary: Lista as arenas da conta autenticada
+      operationId: listArenas
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Arenas da conta, ordenadas da mais recente para a mais antiga
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Arena'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Cadastra uma arena para a conta autenticada
       operationId: createArena
@@ -262,7 +288,8 @@ components:
           maxLength: 2
         created_at:
           type: string
-          format: date-time    ErrorResponse:
+          format: date-time
+    ErrorResponse:
       type: object
       required: [error]
       properties:

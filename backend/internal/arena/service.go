@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Service applies arena registration rules and persists valid arenas.
+// Service applies arena registration rules and persistence operations.
 type Service struct {
 	repository Repository
 }
@@ -27,4 +27,20 @@ func (s *Service) Create(ctx context.Context, ownerUserID int64, details Details
 		return Arena{}, fmt.Errorf("create arena: %w", err)
 	}
 	return createdArena, nil
+}
+
+// ListByOwner returns only arenas belonging to the given authenticated owner.
+func (s *Service) ListByOwner(ctx context.Context, ownerUserID int64) ([]Arena, error) {
+	if ownerUserID <= 0 {
+		return nil, ErrInvalidOwner
+	}
+
+	arenas, err := s.repository.ListByOwner(ctx, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("list arenas: %w", err)
+	}
+	if arenas == nil {
+		arenas = []Arena{}
+	}
+	return arenas, nil
 }

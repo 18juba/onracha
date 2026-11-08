@@ -83,6 +83,58 @@ func TestServiceCreatePersistsValidArena(t *testing.T) {
 	}
 }
 
+func TestServiceListByOwnerReturnsRepositoryResults(t *testing.T) {
+	want := []Arena{{ID: 7, OwnerUserID: 17, Name: "Arena Central"}}
+	repository := &fakeRepository{listedArenas: want}
+	service := NewService(repository)
+
+	got, err := service.ListByOwner(context.Background(), 17)
+	if err != nil {
+		t.Fatalf("ListByOwner() error = %v, want nil", err)
+	}
+	if repository.listCalls != 1 || repository.listedOwnerID != 17 {
+		t.Errorf("repository list calls = %d, owner ID = %d; want one call for 17", repository.listCalls, repository.listedOwnerID)
+	}
+	if len(got) != 1 || got[0].ID != want[0].ID {
+		t.Errorf("ListByOwner() = %+v, want %+v", got, want)
+	}
+}
+
+func TestServiceListByOwnerReturnsEmptySliceWhenNoArenas(t *testing.T) {
+	service := NewService(&fakeRepository{})
+
+	got, err := service.ListByOwner(context.Background(), 17)
+	if err != nil {
+		t.Fatalf("ListByOwner() error = %v, want nil", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("ListByOwner() = %+v, want non-nil empty slice", got)
+	}
+}
+
+func TestServiceListByOwnerRejectsInvalidOwner(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.ListByOwner(context.Background(), 0)
+	if !errors.Is(err, ErrInvalidOwner) {
+		t.Fatalf("ListByOwner() error = %v, want %v", err, ErrInvalidOwner)
+	}
+	if repository.listCalls != 0 {
+		t.Errorf("repository list calls = %d, want 0", repository.listCalls)
+	}
+}
+
+func TestServiceListByOwnerReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{listError: wantErr})
+
+	_, err := service.ListByOwner(context.Background(), 17)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("ListByOwner() error = %v, want wrapped repository error %v", err, wantErr)
+	}
+}
+
 func TestServiceCreateReturnsRepositoryError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
 	service := NewService(&fakeRepository{createError: wantErr})
@@ -92,6 +144,7 @@ func TestServiceCreateReturnsRepositoryError(t *testing.T) {
 		t.Fatalf("Create() error = %v, want wrapped repository error %v", err, wantErr)
 	}
 }
+
 func TestServiceCreateDoesNotPersistInvalidArena(t *testing.T) {
 	repository := &fakeRepository{}
 	service := NewService(repository)
@@ -118,10 +171,23 @@ func validDetails() Details {
 }
 
 type fakeRepository struct {
-	createdArena Arena
-	savedArena   Arena
-	createCalls  int
-	createError  error
+	createdArena  Arena
+	savedArena    Arena
+	createCalls   int
+	createError   error
+	listedArenas  []Arena
+	listedOwnerID int64
+	listCalls     int
+	listError     error
+}
+
+func (r *fakeRepository) ListByOwner(_ context.Context, ownerUserID int64) ([]Arena, error) {
+	r.listCalls++
+	r.listedOwnerID = ownerUserID
+	if r.listError != nil {
+		return nil, r.listError
+	}
+	return r.listedArenas, nil
 }
 
 func (r *fakeRepository) Create(_ context.Context, value Arena) (Arena, error) {
