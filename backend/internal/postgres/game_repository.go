@@ -128,7 +128,8 @@ func (r *GameRepository) SearchAvailable(ctx context.Context, userID int64, filt
 	const query = `
 		SELECT g.id, g.time_slot_id, slot.arena_id, g.organizer_user_id,
 		       slot.starts_at, slot.ends_at, g.created_at, participant.user_id,
-		       arena.id, arena.name, arena.address, arena.city, arena.state
+		       arena.id, arena.name, arena.address, arena.city, arena.state,
+		       arena.latitude, arena.longitude, arena.photo_url
 		FROM games AS g
 		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
 		JOIN arenas AS arena ON arena.id = slot.arena_id
@@ -182,6 +183,9 @@ func (r *GameRepository) SearchAvailable(ctx context.Context, userID int64, filt
 			&value.Arena.Address,
 			&value.Arena.City,
 			&value.Arena.State,
+			&value.Arena.Latitude,
+			&value.Arena.Longitude,
+			&value.Arena.PhotoURL,
 		); err != nil {
 			return nil, fmt.Errorf("scan available game: %w", err)
 		}

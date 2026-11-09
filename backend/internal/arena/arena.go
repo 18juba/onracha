@@ -2,19 +2,23 @@ package arena
 
 import (
 	"errors"
+	"math"
+	"net/url"
 	"strings"
 	"time"
 )
 
 var (
-	ErrInvalidOwner   = errors.New("arena owner is invalid")
-	ErrInvalidArenaID = errors.New("arena ID is invalid")
-	ErrNotFound       = errors.New("arena not found")
-	ErrInvalidName    = errors.New("arena name is required")
-	ErrInvalidType    = errors.New("arena type is required")
-	ErrInvalidAddress = errors.New("arena address is required")
-	ErrInvalidCity    = errors.New("arena city is required")
-	ErrInvalidState   = errors.New("arena state must be a two-letter code")
+	ErrInvalidOwner    = errors.New("arena owner is invalid")
+	ErrInvalidArenaID  = errors.New("arena ID is invalid")
+	ErrNotFound        = errors.New("arena not found")
+	ErrInvalidName     = errors.New("arena name is required")
+	ErrInvalidType     = errors.New("arena type is required")
+	ErrInvalidAddress  = errors.New("arena address is required")
+	ErrInvalidCity     = errors.New("arena city is required")
+	ErrInvalidState    = errors.New("arena state must be a two-letter code")
+	ErrInvalidLocation = errors.New("arena latitude and longitude must be valid coordinates")
+	ErrInvalidPhotoURL = errors.New("arena photo URL must be an absolute HTTP or HTTPS URL")
 )
 
 // Arena is a sports venue managed by one ONRACHA user.
@@ -26,6 +30,9 @@ type Arena struct {
 	Address     string    `json:"address"`
 	City        string    `json:"city"`
 	State       string    `json:"state"`
+	Latitude    *float64  `json:"latitude"`
+	Longitude   *float64  `json:"longitude"`
+	PhotoURL    *string   `json:"photo_url"`
 	Active      bool      `json:"active"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -37,6 +44,9 @@ type Details struct {
 	Address   string
 	City      string
 	State     string
+	Latitude  *float64
+	Longitude *float64
+	PhotoURL  *string
 }
 
 // NewArena validates and normalizes the owner and venue details.
@@ -69,6 +79,13 @@ func NewArena(ownerUserID int64, details Details) (Arena, error) {
 	if !isStateCode(state) {
 		return Arena{}, ErrInvalidState
 	}
+	if !validCoordinates(details.Latitude, details.Longitude) {
+		return Arena{}, ErrInvalidLocation
+	}
+	photoURL, err := normalizePhotoURL(details.PhotoURL)
+	if err != nil {
+		return Arena{}, err
+	}
 
 	return Arena{
 		OwnerUserID: ownerUserID,
@@ -77,8 +94,41 @@ func NewArena(ownerUserID int64, details Details) (Arena, error) {
 		Address:     address,
 		City:        city,
 		State:       state,
+		Latitude:    details.Latitude,
+		Longitude:   details.Longitude,
+		PhotoURL:    photoURL,
 		Active:      true,
 	}, nil
+}
+
+func validCoordinates(latitude, longitude *float64) bool {
+	if (latitude == nil) != (longitude == nil) {
+		return false
+	}
+	if latitude == nil {
+		return true
+	}
+	return !math.IsNaN(*latitude) && !math.IsInf(*latitude, 0) &&
+		!math.IsNaN(*longitude) && !math.IsInf(*longitude, 0) &&
+		*latitude >= -90 && *latitude <= 90 && *longitude >= -180 && *longitude <= 180
+}
+
+func normalizePhotoURL(photoURL *string) (*string, error) {
+	if photoURL == nil {
+		return nil, nil
+	}
+
+	value := strings.TrimSpace(*photoURL)
+	if value == "" {
+		return nil, nil
+	}
+
+	parsedURL, err := url.Parse(value)
+	if err != nil || parsedURL.Hostname() == "" ||
+		(!strings.EqualFold(parsedURL.Scheme, "http") && !strings.EqualFold(parsedURL.Scheme, "https")) {
+		return nil, ErrInvalidPhotoURL
+	}
+	return &value, nil
 }
 
 func isStateCode(state string) bool {

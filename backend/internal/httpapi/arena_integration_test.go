@@ -63,7 +63,7 @@ func TestAuthenticatedUserCanCreateArenaForTheirAccount(t *testing.T) {
 
 	arenaService := arena.NewService(postgres.NewArenaRepository(database))
 	api := NewRouter(authService, arenaService, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{})
-	requestBody := `{"name":"Arena Central","arena_type":"Society","address":"Rua do Esporte, 100","city":"São Paulo","state":"sp"}`
+	requestBody := `{"name":"Arena Central","arena_type":"Society","address":"Rua do Esporte, 100","city":"São Paulo","state":"sp","latitude":-23.55052,"longitude":-46.633308,"photo_url":"https://images.example.test/arena.png"}`
 
 	unauthenticatedRequest := httptest.NewRequest(http.MethodPost, "/api/v1/arenas", bytes.NewBufferString(requestBody))
 	unauthenticatedRequest.Header.Set("Content-Type", "application/json")
@@ -86,16 +86,27 @@ func TestAuthenticatedUserCanCreateArenaForTheirAccount(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &createdArena); err != nil {
 		t.Fatalf("decode create arena response: %v", err)
 	}
-	if createdArena.ID == 0 || createdArena.OwnerUserID != owner.ID || createdArena.ArenaType != "society" || createdArena.State != "SP" {
+	if createdArena.ID == 0 || createdArena.OwnerUserID != owner.ID || createdArena.ArenaType != "society" || createdArena.State != "SP" || createdArena.Latitude == nil || *createdArena.Latitude != -23.55052 || createdArena.Longitude == nil || *createdArena.Longitude != -46.633308 || createdArena.PhotoURL == nil || *createdArena.PhotoURL != "https://images.example.test/arena.png" {
 		t.Fatalf("created arena = %+v, want normalized arena owned by authenticated user %d", createdArena, owner.ID)
 	}
 
 	var persistedOwnerID int64
-	if err := database.QueryRowContext(ctx, "SELECT owner_user_id FROM arenas WHERE id = $1", createdArena.ID).Scan(&persistedOwnerID); err != nil {
+	var persistedLatitude, persistedLongitude sql.NullFloat64
+	var persistedPhotoURL sql.NullString
+	if err := database.QueryRowContext(ctx, "SELECT owner_user_id, latitude, longitude, photo_url FROM arenas WHERE id = $1", createdArena.ID).Scan(&persistedOwnerID, &persistedLatitude, &persistedLongitude, &persistedPhotoURL); err != nil {
 		t.Fatalf("query persisted arena owner: %v", err)
 	}
-	if persistedOwnerID != owner.ID {
-		t.Errorf("persisted arena owner ID = %d, want authenticated user ID %d", persistedOwnerID, owner.ID)
+	if persistedOwnerID != owner.ID || !persistedLatitude.Valid || persistedLatitude.Float64 != -23.55052 || !persistedLongitude.Valid || persistedLongitude.Float64 != -46.633308 || !persistedPhotoURL.Valid || persistedPhotoURL.String != "https://images.example.test/arena.png" {
+		t.Errorf("persisted arena fields = (%d, %v, %v, %v), want authenticated owner and submitted location/photo", persistedOwnerID, persistedLatitude, persistedLongitude, persistedPhotoURL)
+	}
+
+	invalidLocationRequest := httptest.NewRequest(http.MethodPost, "/api/v1/arenas", bytes.NewBufferString(`{"name":"Invalid Arena","arena_type":"society","address":"Rua Um","city":"São Paulo","state":"SP","latitude":-23.5}`))
+	invalidLocationRequest.Header.Set("Content-Type", "application/json")
+	invalidLocationRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+	invalidLocationResponse := httptest.NewRecorder()
+	api.ServeHTTP(invalidLocationResponse, invalidLocationRequest)
+	if invalidLocationResponse.Code != http.StatusBadRequest {
+		t.Errorf("create arena with incomplete coordinates status = %d, want %d; body: %s", invalidLocationResponse.Code, http.StatusBadRequest, invalidLocationResponse.Body.String())
 	}
 
 	spoofedOwnerRequest := httptest.NewRequest(http.MethodPost, "/api/v1/arenas", bytes.NewBufferString(`{"name":"Another Arena","arena_type":"society","address":"Rua do Esporte, 200","city":"São Paulo","state":"SP","owner_user_id":999999}`))

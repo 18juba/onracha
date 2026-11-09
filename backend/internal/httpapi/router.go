@@ -225,12 +225,15 @@ func (h *handler) updateArena(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Name      string `json:"name"`
-		ArenaType string `json:"arena_type"`
-		Address   string `json:"address"`
-		City      string `json:"city"`
-		State     string `json:"state"`
-		Active    *bool  `json:"active"`
+		Name      string   `json:"name"`
+		ArenaType string   `json:"arena_type"`
+		Address   string   `json:"address"`
+		City      string   `json:"city"`
+		State     string   `json:"state"`
+		Latitude  *float64 `json:"latitude"`
+		Longitude *float64 `json:"longitude"`
+		PhotoURL  *string  `json:"photo_url"`
+		Active    *bool    `json:"active"`
 	}
 	if !decodeJSON(w, r, &request) {
 		return
@@ -246,6 +249,9 @@ func (h *handler) updateArena(w http.ResponseWriter, r *http.Request) {
 		Address:   request.Address,
 		City:      request.City,
 		State:     request.State,
+		Latitude:  request.Latitude,
+		Longitude: request.Longitude,
+		PhotoURL:  request.PhotoURL,
 	}, *request.Active)
 	if err != nil {
 		if errors.Is(err, arena.ErrNotFound) {
@@ -295,11 +301,14 @@ func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Name      string `json:"name"`
-		ArenaType string `json:"arena_type"`
-		Address   string `json:"address"`
-		City      string `json:"city"`
-		State     string `json:"state"`
+		Name      string   `json:"name"`
+		ArenaType string   `json:"arena_type"`
+		Address   string   `json:"address"`
+		City      string   `json:"city"`
+		State     string   `json:"state"`
+		Latitude  *float64 `json:"latitude"`
+		Longitude *float64 `json:"longitude"`
+		PhotoURL  *string  `json:"photo_url"`
 	}
 	if !decodeJSON(w, r, &request) {
 		return
@@ -311,6 +320,9 @@ func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 		Address:   request.Address,
 		City:      request.City,
 		State:     request.State,
+		Latitude:  request.Latitude,
+		Longitude: request.Longitude,
+		PhotoURL:  request.PhotoURL,
 	})
 	if err != nil {
 		if isInvalidArenaDetails(err) {
@@ -549,7 +561,9 @@ func isInvalidArenaDetails(err error) bool {
 		errors.Is(err, arena.ErrInvalidType) ||
 		errors.Is(err, arena.ErrInvalidAddress) ||
 		errors.Is(err, arena.ErrInvalidCity) ||
-		errors.Is(err, arena.ErrInvalidState)
+		errors.Is(err, arena.ErrInvalidState) ||
+		errors.Is(err, arena.ErrInvalidLocation) ||
+		errors.Is(err, arena.ErrInvalidPhotoURL)
 }
 
 func (h *handler) authenticatedUser(w http.ResponseWriter, r *http.Request) (auth.User, bool) {

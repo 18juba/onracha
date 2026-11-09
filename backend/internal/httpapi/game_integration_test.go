@@ -83,9 +83,13 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 
 	arenaService := arena.NewService(postgres.NewArenaRepository(database))
 	cities := []string{"São Paulo", "Campinas"}
+	latitudes := []float64{-23.55052, -22.9056}
+	longitudes := []float64{-46.633308, -47.0608}
+	photoURLs := []string{"https://images.example.test/sao-paulo.png", "https://images.example.test/campinas.png"}
 	for index, name := range []string{"First Test Arena", "Second Test Arena"} {
 		created, err := arenaService.Create(ctx, users[0].ID, arena.Details{
 			Name: name, ArenaType: "society", Address: "Rua do Esporte, 100", City: cities[index], State: "SP",
+			Latitude: &latitudes[index], Longitude: &longitudes[index], PhotoURL: &photoURLs[index],
 		})
 		if err != nil {
 			t.Fatalf("create arena %d: %v", index, err)
@@ -286,11 +290,14 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	type gameSearchResult struct {
 		Game  game.Game `json:"game"`
 		Arena struct {
-			ID      int64  `json:"id"`
-			Name    string `json:"name"`
-			Address string `json:"address"`
-			City    string `json:"city"`
-			State   string `json:"state"`
+			ID        int64    `json:"id"`
+			Name      string   `json:"name"`
+			Address   string   `json:"address"`
+			City      string   `json:"city"`
+			State     string   `json:"state"`
+			Latitude  *float64 `json:"latitude"`
+			Longitude *float64 `json:"longitude"`
+			PhotoURL  *string  `json:"photo_url"`
 		} `json:"arena"`
 	}
 	searchByCityAndDatePath := fmt.Sprintf("/api/v1/games?city=%s&date=%s", url.QueryEscape("são paulo"), startsAt.Format("2006-01-02"))
@@ -309,7 +316,7 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		t.Errorf("filtered game IDs = [%d, %d], want [%d, %d]", cityAndDateGames[0].Game.ID, cityAndDateGames[1].Game.ID, firstGame.ID, secondGame.ID)
 	}
 	for _, value := range cityAndDateGames {
-		if value.Arena.City != "São Paulo" || value.Arena.ID != arenas[0].ID {
+		if value.Arena.City != "São Paulo" || value.Arena.ID != arenas[0].ID || value.Arena.Latitude == nil || *value.Arena.Latitude != latitudes[0] || value.Arena.Longitude == nil || *value.Arena.Longitude != longitudes[0] || value.Arena.PhotoURL == nil || *value.Arena.PhotoURL != photoURLs[0] {
 			t.Errorf("search result arena = %+v, want arena %d in São Paulo", value.Arena, arenas[0].ID)
 		}
 	}

@@ -71,8 +71,12 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	}
 
 	arenaService := arena.NewService(postgres.NewArenaRepository(database))
+	firstLatitude := -23.55052
+	firstLongitude := -46.633308
+	firstPhotoURL := "https://images.example.test/first-arena.png"
 	firstArena, err := arenaService.Create(ctx, firstOwner.ID, arena.Details{
 		Name: "First Owner Arena", ArenaType: "society", Address: "Rua Um, 10", City: "São Paulo", State: "SP",
+		Latitude: &firstLatitude, Longitude: &firstLongitude, PhotoURL: &firstPhotoURL,
 	})
 	if err != nil {
 		t.Fatalf("create first owner's arena: %v", err)
@@ -109,7 +113,7 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	if len(arenas) != 1 {
 		t.Fatalf("listed arenas = %d, want 1; body: %s", len(arenas), response.Body.String())
 	}
-	if arenas[0].ID != firstArena.ID || arenas[0].OwnerUserID != firstOwner.ID {
+	if arenas[0].ID != firstArena.ID || arenas[0].OwnerUserID != firstOwner.ID || arenas[0].Latitude == nil || *arenas[0].Latitude != firstLatitude || arenas[0].Longitude == nil || *arenas[0].Longitude != firstLongitude || arenas[0].PhotoURL == nil || *arenas[0].PhotoURL != firstPhotoURL {
 		t.Errorf("listed arena = %+v, want first owner's arena %d", arenas[0], firstArena.ID)
 	}
 
@@ -133,7 +137,7 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	if err := json.Unmarshal(ownerDetailResponse.Body.Bytes(), &ownerArena); err != nil {
 		t.Fatalf("decode owner detail response: %v", err)
 	}
-	if ownerArena.ID != firstArena.ID || ownerArena.OwnerUserID != firstOwner.ID || ownerArena.Name != firstArena.Name || ownerArena.ArenaType != firstArena.ArenaType || ownerArena.Address != firstArena.Address || ownerArena.City != firstArena.City || ownerArena.State != firstArena.State || !ownerArena.Active || !ownerArena.CreatedAt.Equal(firstArena.CreatedAt) {
+	if ownerArena.ID != firstArena.ID || ownerArena.OwnerUserID != firstOwner.ID || ownerArena.Name != firstArena.Name || ownerArena.ArenaType != firstArena.ArenaType || ownerArena.Address != firstArena.Address || ownerArena.City != firstArena.City || ownerArena.State != firstArena.State || ownerArena.Latitude == nil || *ownerArena.Latitude != firstLatitude || ownerArena.Longitude == nil || *ownerArena.Longitude != firstLongitude || ownerArena.PhotoURL == nil || *ownerArena.PhotoURL != firstPhotoURL || !ownerArena.Active || !ownerArena.CreatedAt.Equal(firstArena.CreatedAt) {
 		t.Errorf("owner detail = %+v, want full arena %+v", ownerArena, firstArena)
 	}
 
@@ -158,7 +162,7 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	}
 
 	putPath := detailPath
-	putBody := `{"name":" Arena Updated ","arena_type":" Futsal ","address":" Av. Central, 200 ","city":" Campinas ","state":" sp ","active":false}`
+	putBody := `{"name":" Arena Updated ","arena_type":" Futsal ","address":" Av. Central, 200 ","city":" Campinas ","state":" sp ","active":false,"latitude":-22.9056,"longitude":-47.0608,"photo_url":"https://images.example.test/updated-arena.png"}`
 	unauthenticatedPutRequest := httptest.NewRequest(http.MethodPut, putPath, strings.NewReader(putBody))
 	unauthenticatedPutRequest.Header.Set("Content-Type", "application/json")
 	unauthenticatedPutResponse := httptest.NewRecorder()
@@ -180,7 +184,7 @@ func TestAuthenticatedUserCanAccessOnlyTheirArenas(t *testing.T) {
 	if err := json.Unmarshal(ownerPutResponse.Body.Bytes(), &updatedArena); err != nil {
 		t.Fatalf("decode updated arena response: %v", err)
 	}
-	if updatedArena.ID != firstArena.ID || updatedArena.OwnerUserID != firstOwner.ID || updatedArena.Name != "Arena Updated" || updatedArena.ArenaType != "futsal" || updatedArena.Address != "Av. Central, 200" || updatedArena.City != "Campinas" || updatedArena.State != "SP" || updatedArena.Active || !updatedArena.CreatedAt.Equal(firstArena.CreatedAt) {
+	if updatedArena.ID != firstArena.ID || updatedArena.OwnerUserID != firstOwner.ID || updatedArena.Name != "Arena Updated" || updatedArena.ArenaType != "futsal" || updatedArena.Address != "Av. Central, 200" || updatedArena.City != "Campinas" || updatedArena.State != "SP" || updatedArena.Latitude == nil || *updatedArena.Latitude != -22.9056 || updatedArena.Longitude == nil || *updatedArena.Longitude != -47.0608 || updatedArena.PhotoURL == nil || *updatedArena.PhotoURL != "https://images.example.test/updated-arena.png" || updatedArena.Active || !updatedArena.CreatedAt.Equal(firstArena.CreatedAt) {
 		t.Errorf("updated arena = %+v, want normalized full update with active=false", updatedArena)
 	}
 

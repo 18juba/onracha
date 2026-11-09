@@ -51,11 +51,14 @@ type SearchFilters struct {
 
 // ArenaSummary contains the public venue details needed to browse a game.
 type ArenaSummary struct {
-	ID      int64  `json:"id"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	City    string `json:"city"`
-	State   string `json:"state"`
+	ID        int64    `json:"id"`
+	Name      string   `json:"name"`
+	Address   string   `json:"address"`
+	City      string   `json:"city"`
+	State     string   `json:"state"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+	PhotoURL  *string  `json:"photo_url"`
 }
 
 // SearchResult combines a game with its arena summary for discovery results.

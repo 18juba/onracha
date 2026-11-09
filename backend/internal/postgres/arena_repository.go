@@ -22,8 +22,8 @@ func NewArenaRepository(db *sql.DB) *ArenaRepository {
 // Create inserts an arena owned by the authenticated user and returns its database fields.
 func (r *ArenaRepository) Create(ctx context.Context, value arena.Arena) (arena.Arena, error) {
 	const query = `
-		INSERT INTO arenas (owner_user_id, name, arena_type, address, city, state, active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO arenas (owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, active, created_at`
 	if err := r.db.QueryRowContext(ctx, query,
 		value.OwnerUserID,
@@ -33,6 +33,9 @@ func (r *ArenaRepository) Create(ctx context.Context, value arena.Arena) (arena.
 		value.City,
 		value.State,
 		value.Active,
+		value.Latitude,
+		value.Longitude,
+		value.PhotoURL,
 	).Scan(&value.ID, &value.Active, &value.CreatedAt); err != nil {
 		return arena.Arena{}, fmt.Errorf("insert arena: %w", err)
 	}
@@ -42,7 +45,7 @@ func (r *ArenaRepository) Create(ctx context.Context, value arena.Arena) (arena.
 // ListByOwner returns arenas for one owner, newest first.
 func (r *ArenaRepository) ListByOwner(ctx context.Context, ownerUserID int64) ([]arena.Arena, error) {
 	const query = `
-		SELECT id, owner_user_id, name, arena_type, address, city, state, active, created_at
+		SELECT id, owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url, created_at
 		FROM arenas
 		WHERE owner_user_id = $1
 		ORDER BY created_at DESC, id DESC`
@@ -65,6 +68,9 @@ func (r *ArenaRepository) ListByOwner(ctx context.Context, ownerUserID int64) ([
 			&value.City,
 			&value.State,
 			&value.Active,
+			&value.Latitude,
+			&value.Longitude,
+			&value.PhotoURL,
 			&value.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan arena: %w", err)
@@ -80,7 +86,7 @@ func (r *ArenaRepository) ListByOwner(ctx context.Context, ownerUserID int64) ([
 // GetByIDAndOwner returns one arena only when it belongs to the supplied owner.
 func (r *ArenaRepository) GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error) {
 	const query = `
-		SELECT id, owner_user_id, name, arena_type, address, city, state, active, created_at
+		SELECT id, owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url, created_at
 		FROM arenas
 		WHERE id = $1 AND owner_user_id = $2`
 
@@ -94,6 +100,9 @@ func (r *ArenaRepository) GetByIDAndOwner(ctx context.Context, arenaID, ownerUse
 		&value.City,
 		&value.State,
 		&value.Active,
+		&value.Latitude,
+		&value.Longitude,
+		&value.PhotoURL,
 		&value.CreatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -108,9 +117,10 @@ func (r *ArenaRepository) GetByIDAndOwner(ctx context.Context, arenaID, ownerUse
 func (r *ArenaRepository) Update(ctx context.Context, value arena.Arena) (arena.Arena, error) {
 	const query = `
 		UPDATE arenas
-		SET name = $3, arena_type = $4, address = $5, city = $6, state = $7, active = $8
+		SET name = $3, arena_type = $4, address = $5, city = $6, state = $7, active = $8,
+			latitude = $9, longitude = $10, photo_url = $11
 		WHERE id = $1 AND owner_user_id = $2
-		RETURNING id, owner_user_id, name, arena_type, address, city, state, active, created_at`
+		RETURNING id, owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url, created_at`
 
 	var updated arena.Arena
 	if err := r.db.QueryRowContext(ctx, query,
@@ -122,6 +132,9 @@ func (r *ArenaRepository) Update(ctx context.Context, value arena.Arena) (arena.
 		value.City,
 		value.State,
 		value.Active,
+		value.Latitude,
+		value.Longitude,
+		value.PhotoURL,
 	).Scan(
 		&updated.ID,
 		&updated.OwnerUserID,
@@ -131,6 +144,9 @@ func (r *ArenaRepository) Update(ctx context.Context, value arena.Arena) (arena.
 		&updated.City,
 		&updated.State,
 		&updated.Active,
+		&updated.Latitude,
+		&updated.Longitude,
+		&updated.PhotoURL,
 		&updated.CreatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -147,7 +163,7 @@ func (r *ArenaRepository) ToggleActive(ctx context.Context, arenaID, ownerUserID
 		UPDATE arenas
 		SET active = NOT active
 		WHERE id = $1 AND owner_user_id = $2
-		RETURNING id, owner_user_id, name, arena_type, address, city, state, active, created_at`
+		RETURNING id, owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url, created_at`
 
 	var updated arena.Arena
 	if err := r.db.QueryRowContext(ctx, query, arenaID, ownerUserID).Scan(
@@ -159,6 +175,9 @@ func (r *ArenaRepository) ToggleActive(ctx context.Context, arenaID, ownerUserID
 		&updated.City,
 		&updated.State,
 		&updated.Active,
+		&updated.Latitude,
+		&updated.Longitude,
+		&updated.PhotoURL,
 		&updated.CreatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

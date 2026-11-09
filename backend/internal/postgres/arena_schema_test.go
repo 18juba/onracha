@@ -57,19 +57,25 @@ func TestArenaHasOwnerAndAUserCanOwnMultipleArenas(t *testing.T) {
 		}
 	})
 
+	latitude := -23.55052
+	longitude := -46.633308
+	photoURL := "https://images.example.test/arena.png"
 	for _, arena := range []struct {
-		name     string
-		typeName string
+		name      string
+		typeName  string
+		latitude  *float64
+		longitude *float64
+		photoURL  *string
 	}{
-		{name: "Arena Society", typeName: "society"},
+		{name: "Arena Society", typeName: "society", latitude: &latitude, longitude: &longitude, photoURL: &photoURL},
 		{name: "Arena Futsal", typeName: "futsal"},
 	} {
 		var arenaID int64
 		var createdAt time.Time
 		err := database.QueryRowContext(ctx, `
-			INSERT INTO arenas (owner_user_id, name, arena_type, address, city, state)
-			VALUES ($1, $2, $3, 'Rua do Esporte, 100', 'São Paulo', 'SP')
-			RETURNING id, created_at`, userID, arena.name, arena.typeName).Scan(&arenaID, &createdAt)
+			INSERT INTO arenas (owner_user_id, name, arena_type, address, city, state, latitude, longitude, photo_url)
+			VALUES ($1, $2, $3, 'Rua do Esporte, 100', 'São Paulo', 'SP', $4, $5, $6)
+			RETURNING id, created_at`, userID, arena.name, arena.typeName, arena.latitude, arena.longitude, arena.photoURL).Scan(&arenaID, &createdAt)
 		if err != nil {
 			t.Fatalf("create arena %q: %v", arena.name, err)
 		}
@@ -83,6 +89,14 @@ func TestArenaHasOwnerAndAUserCanOwnMultipleArenas(t *testing.T) {
 	}
 	if arenaCount != 2 {
 		t.Errorf("arenas owned by test user = %d, want 2", arenaCount)
+	}
+
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO arenas (owner_user_id, name, arena_type, address, city, state, latitude, longitude)
+		VALUES ($1, 'Arena with invalid location', 'society', 'Rua Um', 'São Paulo', 'SP', 91, 0)`, userID)
+	var constraintError *pgconn.PgError
+	if !errors.As(err, &constraintError) || constraintError.Code != "23514" {
+		t.Errorf("inserting arena with out-of-range latitude error = %v, want check constraint violation", err)
 	}
 
 	_, err = database.ExecContext(ctx, `

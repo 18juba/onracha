@@ -3,6 +3,7 @@ package arena
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -23,6 +24,125 @@ func TestNewArenaNormalizesDetails(t *testing.T) {
 	}
 	if !got.Active {
 		t.Error("NewArena().Active = false, want newly registered arenas to be active")
+	}
+}
+
+func TestNewArenaKeepsCoordinatesAndNormalizesPhotoURL(t *testing.T) {
+	latitude := -23.55052
+	longitude := -46.633308
+	photoURL := " https://images.example.test/arena.png "
+	details := validDetails()
+	details.Latitude = &latitude
+	details.Longitude = &longitude
+	details.PhotoURL = &photoURL
+
+	got, err := NewArena(17, details)
+	if err != nil {
+		t.Fatalf("NewArena() error = %v, want nil", err)
+	}
+	if got.Latitude == nil || *got.Latitude != latitude || got.Longitude == nil || *got.Longitude != longitude {
+		t.Errorf("NewArena() coordinates = (%v, %v), want (%v, %v)", got.Latitude, got.Longitude, latitude, longitude)
+	}
+	if got.PhotoURL == nil || *got.PhotoURL != "https://images.example.test/arena.png" {
+		t.Errorf("NewArena().PhotoURL = %v, want trimmed photo URL", got.PhotoURL)
+	}
+}
+
+func TestNewArenaAllowsMissingCoordinatesAndPhotoURL(t *testing.T) {
+	got, err := NewArena(17, validDetails())
+	if err != nil {
+		t.Fatalf("NewArena() error = %v, want nil", err)
+	}
+	if got.Latitude != nil || got.Longitude != nil || got.PhotoURL != nil {
+		t.Errorf("NewArena() optional map details = (%v, %v, %v), want nil values", got.Latitude, got.Longitude, got.PhotoURL)
+	}
+}
+
+func TestNewArenaRequiresLatitudeAndLongitudeTogether(t *testing.T) {
+	latitude := -23.55052
+	longitude := -46.633308
+	tests := []struct {
+		name      string
+		latitude  *float64
+		longitude *float64
+	}{
+		{name: "latitude only", latitude: &latitude},
+		{name: "longitude only", longitude: &longitude},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			details := validDetails()
+			details.Latitude = test.latitude
+			details.Longitude = test.longitude
+			if _, err := NewArena(17, details); !errors.Is(err, ErrInvalidLocation) {
+				t.Errorf("NewArena() error = %v, want %v", err, ErrInvalidLocation)
+			}
+		})
+	}
+}
+
+func TestNewArenaRejectsCoordinatesOutsideGeographicBounds(t *testing.T) {
+	tests := []struct {
+		name      string
+		latitude  float64
+		longitude float64
+	}{
+		{name: "latitude below minimum", latitude: -90.01, longitude: 0},
+		{name: "latitude above maximum", latitude: 90.01, longitude: 0},
+		{name: "longitude below minimum", latitude: 0, longitude: -180.01},
+		{name: "longitude above maximum", latitude: 0, longitude: 180.01},
+		{name: "not a number", latitude: math.NaN(), longitude: 0},
+		{name: "infinite coordinate", latitude: 0, longitude: math.Inf(1)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			details := validDetails()
+			details.Latitude = &test.latitude
+			details.Longitude = &test.longitude
+			if _, err := NewArena(17, details); !errors.Is(err, ErrInvalidLocation) {
+				t.Errorf("NewArena() error = %v, want %v", err, ErrInvalidLocation)
+			}
+		})
+	}
+}
+
+func TestNewArenaAcceptsCoordinateBoundaries(t *testing.T) {
+	latitude := -90.0
+	longitude := 180.0
+	details := validDetails()
+	details.Latitude = &latitude
+	details.Longitude = &longitude
+
+	if _, err := NewArena(17, details); err != nil {
+		t.Errorf("NewArena() at valid geographic boundaries error = %v, want nil", err)
+	}
+}
+
+func TestNewArenaRejectsInvalidPhotoURL(t *testing.T) {
+	for _, photoURL := range []string{"javascript:alert(1)", "ftp://images.example.test/arena.png", "/images/arena.png", "https:///missing-host"} {
+		t.Run(photoURL, func(t *testing.T) {
+			details := validDetails()
+			details.PhotoURL = &photoURL
+			if _, err := NewArena(17, details); !errors.Is(err, ErrInvalidPhotoURL) {
+				t.Errorf("NewArena() error = %v, want %v", err, ErrInvalidPhotoURL)
+			}
+		})
+	}
+}
+
+func TestNewArenaTreatsBlankPhotoURLAsMissing(t *testing.T) {
+	photoURL := "  "
+	details := validDetails()
+	details.PhotoURL = &photoURL
+
+	got, err := NewArena(17, details)
+	if err != nil {
+		t.Fatalf("NewArena() error = %v, want nil", err)
+	}
+	if got.PhotoURL != nil {
+		t.Errorf("NewArena().PhotoURL = %q, want nil", *got.PhotoURL)
 	}
 }
 
