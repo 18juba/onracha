@@ -6,6 +6,7 @@ import "context"
 type Repository interface {
 	Create(ctx context.Context, value Arena) (Arena, error)
 	ListByOwner(ctx context.Context, ownerUserID int64) ([]Arena, error)
+	Discover(ctx context.Context, filters DiscoveryFilters) ([]PublicArena, error)
 	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (Arena, error)
 	Update(ctx context.Context, value Arena) (Arena, error)
 	UpdatePhotoURL(ctx context.Context, arenaID, ownerUserID int64, photoURL string) (Arena, error)

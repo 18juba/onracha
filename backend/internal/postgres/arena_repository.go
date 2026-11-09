@@ -83,6 +83,57 @@ func (r *ArenaRepository) ListByOwner(ctx context.Context, ownerUserID int64) ([
 	return arenas, nil
 }
 
+// Discover returns active arenas matching a city and/or nearby location, regardless of scheduled games.
+func (r *ArenaRepository) Discover(ctx context.Context, filters arena.DiscoveryFilters) ([]arena.PublicArena, error) {
+	const query = `
+		WITH candidates AS (
+			SELECT id, name, arena_type, address, city, state, latitude, longitude, photo_url,
+				CASE
+					WHEN $2::double precision IS NULL OR latitude IS NULL OR longitude IS NULL THEN NULL
+					ELSE 6371.0::double precision * 2.0::double precision * ASIN(SQRT(LEAST(1.0::double precision,
+						POWER(SIN(RADIANS(latitude - $2::double precision) / 2.0::double precision), 2.0::double precision) +
+						COS(RADIANS($2::double precision)) * COS(RADIANS(latitude)) *
+						POWER(SIN(RADIANS(longitude - $3::double precision) / 2.0::double precision), 2.0::double precision)
+					)))
+				END AS distance_km
+			FROM arenas
+			WHERE active = TRUE AND ($1 = '' OR LOWER(city) = LOWER($1))
+		)
+		SELECT id, name, arena_type, address, city, state, latitude, longitude, photo_url
+		FROM candidates
+		WHERE $2::double precision IS NULL OR distance_km <= $4::double precision
+		ORDER BY distance_km NULLS LAST, LOWER(city), LOWER(name), id`
+
+	rows, err := r.db.QueryContext(ctx, query, filters.City, filters.Latitude, filters.Longitude, filters.RadiusKM)
+	if err != nil {
+		return nil, fmt.Errorf("query arena discovery: %w", err)
+	}
+	defer rows.Close()
+
+	arenas := make([]arena.PublicArena, 0)
+	for rows.Next() {
+		var value arena.PublicArena
+		if err := rows.Scan(
+			&value.ID,
+			&value.Name,
+			&value.ArenaType,
+			&value.Address,
+			&value.City,
+			&value.State,
+			&value.Latitude,
+			&value.Longitude,
+			&value.PhotoURL,
+		); err != nil {
+			return nil, fmt.Errorf("scan discovered arena: %w", err)
+		}
+		arenas = append(arenas, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate discovered arenas: %w", err)
+	}
+	return arenas, nil
+}
+
 // GetByIDAndOwner returns one arena only when it belongs to the supplied owner.
 func (r *ArenaRepository) GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error) {
 	const query = `

@@ -452,6 +452,10 @@ type fakeRepository struct {
 	listedOwnerID     int64
 	listCalls         int
 	listError         error
+	discoveredArenas  []PublicArena
+	discoverFilters   DiscoveryFilters
+	discoverCalls     int
+	discoverError     error
 	queriedArena      Arena
 	queriedArenaID    int64
 	queriedOwnerID    int64
@@ -521,6 +525,15 @@ func (r *fakeRepository) ListByOwner(_ context.Context, ownerUserID int64) ([]Ar
 		return nil, r.listError
 	}
 	return r.listedArenas, nil
+}
+
+func (r *fakeRepository) Discover(_ context.Context, filters DiscoveryFilters) ([]PublicArena, error) {
+	r.discoverCalls++
+	r.discoverFilters = filters
+	if r.discoverError != nil {
+		return nil, r.discoverError
+	}
+	return r.discoveredArenas, nil
 }
 
 func (r *fakeRepository) Create(_ context.Context, value Arena) (Arena, error) {

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ type AuthService interface {
 type ArenaService interface {
 	Create(ctx context.Context, ownerUserID int64, details arena.Details) (arena.Arena, error)
 	ListByOwner(ctx context.Context, ownerUserID int64) ([]arena.Arena, error)
+	Discover(ctx context.Context, filters arena.DiscoveryFilters) ([]arena.PublicArena, error)
 	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
 	Update(ctx context.Context, arenaID, ownerUserID int64, details arena.Details, active bool) (arena.Arena, error)
 	ToggleActive(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
@@ -86,6 +88,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
 	mux.HandleFunc("GET /api/v1/arenas", api.listArenas)
+	mux.HandleFunc("GET /api/v1/arenas/discover", api.discoverArenas)
 	mux.HandleFunc("GET /api/v1/arenas/{id}", api.getArena)
 	mux.HandleFunc("PUT /api/v1/arenas/{id}", api.updateArena)
 	mux.HandleFunc("PUT /api/v1/arenas/{id}/photo", api.replaceArenaPhoto)
@@ -190,6 +193,38 @@ func (h *handler) listArenas(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("arena listing failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível listar as arenas.")
+		return
+	}
+	writeJSON(w, http.StatusOK, arenas)
+}
+
+func (h *handler) discoverArenas(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+
+	query := r.URL.Query()
+	latitude, latitudeValid := parseOptionalFloatQuery(query, "latitude")
+	longitude, longitudeValid := parseOptionalFloatQuery(query, "longitude")
+	radius, radiusValid := parseOptionalFloatQuery(query, "radius_km")
+	if !latitudeValid || !longitudeValid || !radiusValid {
+		writeError(w, http.StatusBadRequest, "invalid_discovery_filters", "Informe uma cidade ou coordenadas válidas para buscar arenas.")
+		return
+	}
+
+	arenas, err := h.arenaService.Discover(r.Context(), arena.DiscoveryFilters{
+		City:      query.Get("city"),
+		Latitude:  latitude,
+		Longitude: longitude,
+		RadiusKM:  radius,
+	})
+	if errors.Is(err, arena.ErrInvalidDiscoveryFilters) {
+		writeError(w, http.StatusBadRequest, "invalid_discovery_filters", "Informe uma cidade ou coordenadas válidas para buscar arenas.")
+		return
+	}
+	if err != nil {
+		h.logger.Error("arena discovery failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível buscar arenas.")
 		return
 	}
 	writeJSON(w, http.StatusOK, arenas)
@@ -638,6 +673,21 @@ func parseArenaID(value string) (int64, error) {
 func parsePositiveID(value string) (int64, bool) {
 	id, err := strconv.ParseInt(value, 10, 64)
 	return id, err == nil && id > 0
+}
+
+func parseOptionalFloatQuery(query url.Values, key string) (*float64, bool) {
+	values, exists := query[key]
+	if !exists {
+		return nil, true
+	}
+	if len(values) != 1 || strings.TrimSpace(values[0]) == "" {
+		return nil, false
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(values[0]), 64)
+	if err != nil {
+		return nil, false
+	}
+	return &value, true
 }
 
 func isGeneratedPhotoFilename(filename string) bool {

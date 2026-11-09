@@ -189,6 +189,10 @@ type photoUploadRepository struct {
 	value            arena.Arena
 	photoURL         *string
 	photoUpdateCalls int
+	discoveredArenas []arena.PublicArena
+	discoveryFilters arena.DiscoveryFilters
+	discoveryCalls   int
+	discoveryError   error
 }
 
 func (r *photoUploadRepository) Create(_ context.Context, value arena.Arena) (arena.Arena, error) {
@@ -197,6 +201,15 @@ func (r *photoUploadRepository) Create(_ context.Context, value arena.Arena) (ar
 
 func (r *photoUploadRepository) ListByOwner(context.Context, int64) ([]arena.Arena, error) {
 	return []arena.Arena{}, nil
+}
+
+func (r *photoUploadRepository) Discover(_ context.Context, filters arena.DiscoveryFilters) ([]arena.PublicArena, error) {
+	r.discoveryCalls++
+	r.discoveryFilters = filters
+	if r.discoveryError != nil {
+		return nil, r.discoveryError
+	}
+	return r.discoveredArenas, nil
 }
 
 func (r *photoUploadRepository) GetByIDAndOwner(_ context.Context, arenaID, ownerUserID int64) (arena.Arena, error) {
