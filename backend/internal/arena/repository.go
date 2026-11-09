@@ -8,5 +8,6 @@ type Repository interface {
 	ListByOwner(ctx context.Context, ownerUserID int64) ([]Arena, error)
 	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (Arena, error)
 	Update(ctx context.Context, value Arena) (Arena, error)
+	UpdatePhotoURL(ctx context.Context, arenaID, ownerUserID int64, photoURL string) (Arena, error)
 	ToggleActive(ctx context.Context, arenaID, ownerUserID int64) (Arena, error)
 }

@@ -39,9 +39,12 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       SESSION_COOKIE_SECURE: "false"
       OPENAPI_SPEC_PATH: /docs/openapi.yaml
+      PHOTO_STORAGE_DIR: /uploads
+      PHOTO_PUBLIC_URL: ${PHOTO_PUBLIC_URL:-http://localhost:8080}
     volumes:
       - ./backend:/app
       - ./docs:/docs:ro
+      - arena_photos:/uploads
     ports:
       - "8080:8080"
     depends_on:
@@ -63,3 +66,4 @@ services:
 volumes:
   frontend_node_modules:
   postgres_data:
+  arena_photos:

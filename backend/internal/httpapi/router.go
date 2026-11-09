@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +34,7 @@ type ArenaService interface {
 	GetByIDAndOwner(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
 	Update(ctx context.Context, arenaID, ownerUserID int64, details arena.Details, active bool) (arena.Arena, error)
 	ToggleActive(ctx context.Context, arenaID, ownerUserID int64) (arena.Arena, error)
+	ReplacePhoto(ctx context.Context, arenaID, ownerUserID int64, source io.Reader) (arena.Arena, error)
 }
 
 // GameService describes arena availability and game participation operations.
@@ -52,6 +55,7 @@ type Config struct {
 	AllowedOrigin   string
 	SecureCookies   bool
 	OpenAPISpecPath string
+	PhotoDirectory  string
 }
 
 type handler struct {
@@ -84,6 +88,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("GET /api/v1/arenas", api.listArenas)
 	mux.HandleFunc("GET /api/v1/arenas/{id}", api.getArena)
 	mux.HandleFunc("PUT /api/v1/arenas/{id}", api.updateArena)
+	mux.HandleFunc("PUT /api/v1/arenas/{id}/photo", api.replaceArenaPhoto)
 	mux.HandleFunc("PATCH /api/v1/arenas/{id}/active", api.toggleArenaActive)
 	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
 	mux.HandleFunc("POST /api/v1/arenas/{id}/time-slots", api.createTimeSlot)
@@ -95,6 +100,9 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
 	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
 	mux.HandleFunc("DELETE /api/v1/games/{id}/participants/me", api.leaveGame)
+	if config.PhotoDirectory != "" {
+		mux.HandleFunc("GET /uploads/{filename}", api.uploadedPhoto)
+	}
 
 	return api.cors(api.requestLogger(mux))
 }
@@ -232,7 +240,6 @@ func (h *handler) updateArena(w http.ResponseWriter, r *http.Request) {
 		State     string   `json:"state"`
 		Latitude  *float64 `json:"latitude"`
 		Longitude *float64 `json:"longitude"`
-		PhotoURL  *string  `json:"photo_url"`
 		Active    *bool    `json:"active"`
 	}
 	if !decodeJSON(w, r, &request) {
@@ -251,7 +258,6 @@ func (h *handler) updateArena(w http.ResponseWriter, r *http.Request) {
 		State:     request.State,
 		Latitude:  request.Latitude,
 		Longitude: request.Longitude,
-		PhotoURL:  request.PhotoURL,
 	}, *request.Active)
 	if err != nil {
 		if errors.Is(err, arena.ErrNotFound) {
@@ -294,6 +300,86 @@ func (h *handler) toggleArenaActive(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updatedArena)
 }
 
+func (h *handler) replaceArenaPhoto(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, err := parseArenaID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, int64(arena.MaxPhotoSize)+(64<<10))
+	parseErr := r.ParseMultipartForm(1 << 20)
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+	if parseErr != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(parseErr, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "photo_too_large", "A imagem deve ter no máximo 5 MiB.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_multipart", "Envie uma imagem no campo file usando multipart/form-data.")
+		return
+	}
+	if r.MultipartForm == nil || len(r.MultipartForm.File) != 1 || len(r.MultipartForm.File["file"]) != 1 || len(r.MultipartForm.Value) != 0 {
+		writeError(w, http.StatusBadRequest, "invalid_photo_file", "Envie apenas um arquivo no campo file.")
+		return
+	}
+
+	file, err := r.MultipartForm.File["file"][0].Open()
+	if err != nil {
+		h.logger.Error("arena photo could not be opened", "arena_id", arenaID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível ler a imagem enviada.")
+		return
+	}
+	defer file.Close()
+
+	updatedArena, err := h.arenaService.ReplacePhoto(r.Context(), arenaID, user.ID, file)
+	if errors.Is(err, arena.ErrInvalidArenaID) {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+	if errors.Is(err, arena.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "arena_not_found", "Arena não encontrada.")
+		return
+	}
+	if errors.Is(err, arena.ErrPhotoTooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, "photo_too_large", "A imagem deve ter no máximo 5 MiB.")
+		return
+	}
+	if errors.Is(err, arena.ErrInvalidPhoto) {
+		writeError(w, http.StatusBadRequest, "invalid_photo", "Envie uma imagem JPEG ou PNG válida.")
+		return
+	}
+	if errors.Is(err, arena.ErrPhotoCleanup) {
+		h.logger.Warn("previous arena photo cleanup failed", "arena_id", arenaID, "error", err)
+		writeJSON(w, http.StatusOK, updatedArena)
+		return
+	}
+	if err != nil {
+		h.logger.Error("arena photo upload failed", "arena_id", arenaID, "user_id", user.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível salvar a imagem da arena.")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, updatedArena)
+}
+
+func (h *handler) uploadedPhoto(w http.ResponseWriter, r *http.Request) {
+	filename := r.PathValue("filename")
+	if !isGeneratedPhotoFilename(filename) {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeFile(w, r, filepath.Join(h.config.PhotoDirectory, filename))
+}
+
 func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.authenticatedUser(w, r)
 	if !ok {
@@ -308,7 +394,6 @@ func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 		State     string   `json:"state"`
 		Latitude  *float64 `json:"latitude"`
 		Longitude *float64 `json:"longitude"`
-		PhotoURL  *string  `json:"photo_url"`
 	}
 	if !decodeJSON(w, r, &request) {
 		return
@@ -322,7 +407,6 @@ func (h *handler) createArena(w http.ResponseWriter, r *http.Request) {
 		State:     request.State,
 		Latitude:  request.Latitude,
 		Longitude: request.Longitude,
-		PhotoURL:  request.PhotoURL,
 	})
 	if err != nil {
 		if isInvalidArenaDetails(err) {
@@ -556,14 +640,26 @@ func parsePositiveID(value string) (int64, bool) {
 	return id, err == nil && id > 0
 }
 
+func isGeneratedPhotoFilename(filename string) bool {
+	extension := filepath.Ext(filename)
+	if extension != ".jpg" && extension != ".png" {
+		return false
+	}
+	identifier := strings.TrimSuffix(filename, extension)
+	if len(identifier) != 32 {
+		return false
+	}
+	_, err := hex.DecodeString(identifier)
+	return err == nil
+}
+
 func isInvalidArenaDetails(err error) bool {
 	return errors.Is(err, arena.ErrInvalidName) ||
 		errors.Is(err, arena.ErrInvalidType) ||
 		errors.Is(err, arena.ErrInvalidAddress) ||
 		errors.Is(err, arena.ErrInvalidCity) ||
 		errors.Is(err, arena.ErrInvalidState) ||
-		errors.Is(err, arena.ErrInvalidLocation) ||
-		errors.Is(err, arena.ErrInvalidPhotoURL)
+		errors.Is(err, arena.ErrInvalidLocation)
 }
 
 func (h *handler) authenticatedUser(w http.ResponseWriter, r *http.Request) (auth.User, bool) {

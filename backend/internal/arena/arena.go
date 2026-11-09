@@ -46,7 +46,6 @@ type Details struct {
 	State     string
 	Latitude  *float64
 	Longitude *float64
-	PhotoURL  *string
 }
 
 // NewArena validates and normalizes the owner and venue details.
@@ -82,11 +81,6 @@ func NewArena(ownerUserID int64, details Details) (Arena, error) {
 	if !validCoordinates(details.Latitude, details.Longitude) {
 		return Arena{}, ErrInvalidLocation
 	}
-	photoURL, err := normalizePhotoURL(details.PhotoURL)
-	if err != nil {
-		return Arena{}, err
-	}
-
 	return Arena{
 		OwnerUserID: ownerUserID,
 		Name:        name,
@@ -96,7 +90,6 @@ func NewArena(ownerUserID int64, details Details) (Arena, error) {
 		State:       state,
 		Latitude:    details.Latitude,
 		Longitude:   details.Longitude,
-		PhotoURL:    photoURL,
 		Active:      true,
 	}, nil
 }

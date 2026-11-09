@@ -10,12 +10,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
 
 	"onracha/internal/arena"
 	"onracha/internal/auth"
+	"onracha/internal/photostorage"
 	"onracha/internal/postgres"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -61,9 +63,14 @@ func TestAuthenticatedUserCanCreateArenaForTheirAccount(t *testing.T) {
 		t.Fatalf("login test owner: %v", err)
 	}
 
-	arenaService := arena.NewService(postgres.NewArenaRepository(database))
-	api := NewRouter(authService, arenaService, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{})
-	requestBody := `{"name":"Arena Central","arena_type":"Society","address":"Rua do Esporte, 100","city":"São Paulo","state":"sp","latitude":-23.55052,"longitude":-46.633308,"photo_url":"https://images.example.test/arena.png"}`
+	photoDirectory := t.TempDir()
+	photoStorage, err := photostorage.NewLocalStorage(photoDirectory, "http://localhost:8080")
+	if err != nil {
+		t.Fatalf("create local photo storage: %v", err)
+	}
+	arenaService := arena.NewService(postgres.NewArenaRepository(database), photoStorage)
+	api := NewRouter(authService, arenaService, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{PhotoDirectory: photoDirectory})
+	requestBody := `{"name":"Arena Central","arena_type":"Society","address":"Rua do Esporte, 100","city":"São Paulo","state":"sp","latitude":-23.55052,"longitude":-46.633308}`
 
 	unauthenticatedRequest := httptest.NewRequest(http.MethodPost, "/api/v1/arenas", bytes.NewBufferString(requestBody))
 	unauthenticatedRequest.Header.Set("Content-Type", "application/json")
@@ -86,8 +93,43 @@ func TestAuthenticatedUserCanCreateArenaForTheirAccount(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &createdArena); err != nil {
 		t.Fatalf("decode create arena response: %v", err)
 	}
-	if createdArena.ID == 0 || createdArena.OwnerUserID != owner.ID || createdArena.ArenaType != "society" || createdArena.State != "SP" || createdArena.Latitude == nil || *createdArena.Latitude != -23.55052 || createdArena.Longitude == nil || *createdArena.Longitude != -46.633308 || createdArena.PhotoURL == nil || *createdArena.PhotoURL != "https://images.example.test/arena.png" {
+	if createdArena.ID == 0 || createdArena.OwnerUserID != owner.ID || createdArena.ArenaType != "society" || createdArena.State != "SP" || createdArena.Latitude == nil || *createdArena.Latitude != -23.55052 || createdArena.Longitude == nil || *createdArena.Longitude != -46.633308 || createdArena.PhotoURL != nil {
 		t.Fatalf("created arena = %+v, want normalized arena owned by authenticated user %d", createdArena, owner.ID)
+	}
+
+	photoBody, photoContentType := photoMultipartBody(t, encodeHTTPTestPNG(t), "text/plain")
+	unauthenticatedPhotoRequest := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/arenas/%d/photo", createdArena.ID), photoBody)
+	unauthenticatedPhotoRequest.Header.Set("Content-Type", photoContentType)
+	unauthenticatedPhotoResponse := httptest.NewRecorder()
+	api.ServeHTTP(unauthenticatedPhotoResponse, unauthenticatedPhotoRequest)
+	if unauthenticatedPhotoResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated photo upload status = %d, want %d", unauthenticatedPhotoResponse.Code, http.StatusUnauthorized)
+	}
+
+	photoBody, photoContentType = photoMultipartBody(t, encodeHTTPTestPNG(t), "text/plain")
+	photoRequest := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/arenas/%d/photo", createdArena.ID), photoBody)
+	photoRequest.Header.Set("Content-Type", photoContentType)
+	photoRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: session.Token})
+	photoResponse := httptest.NewRecorder()
+	api.ServeHTTP(photoResponse, photoRequest)
+	if photoResponse.Code != http.StatusOK {
+		t.Fatalf("photo upload status = %d, want %d; body: %s", photoResponse.Code, http.StatusOK, photoResponse.Body.String())
+	}
+	var uploadedArena arena.Arena
+	if err := json.Unmarshal(photoResponse.Body.Bytes(), &uploadedArena); err != nil {
+		t.Fatalf("decode arena after photo upload: %v", err)
+	}
+	if uploadedArena.PhotoURL == nil || uploadedArena.ID != createdArena.ID {
+		t.Fatalf("arena after photo upload = %+v, want arena with stored photo reference", uploadedArena)
+	}
+	photoURL, err := url.Parse(*uploadedArena.PhotoURL)
+	if err != nil {
+		t.Fatalf("parse uploaded photo URL: %v", err)
+	}
+	photoReadResponse := httptest.NewRecorder()
+	api.ServeHTTP(photoReadResponse, httptest.NewRequest(http.MethodGet, photoURL.Path, nil))
+	if photoReadResponse.Code != http.StatusOK || photoReadResponse.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("read uploaded photo status/content type = %d/%q, want 200/image/png", photoReadResponse.Code, photoReadResponse.Header().Get("Content-Type"))
 	}
 
 	var persistedOwnerID int64
@@ -96,8 +138,8 @@ func TestAuthenticatedUserCanCreateArenaForTheirAccount(t *testing.T) {
 	if err := database.QueryRowContext(ctx, "SELECT owner_user_id, latitude, longitude, photo_url FROM arenas WHERE id = $1", createdArena.ID).Scan(&persistedOwnerID, &persistedLatitude, &persistedLongitude, &persistedPhotoURL); err != nil {
 		t.Fatalf("query persisted arena owner: %v", err)
 	}
-	if persistedOwnerID != owner.ID || !persistedLatitude.Valid || persistedLatitude.Float64 != -23.55052 || !persistedLongitude.Valid || persistedLongitude.Float64 != -46.633308 || !persistedPhotoURL.Valid || persistedPhotoURL.String != "https://images.example.test/arena.png" {
-		t.Errorf("persisted arena fields = (%d, %v, %v, %v), want authenticated owner and submitted location/photo", persistedOwnerID, persistedLatitude, persistedLongitude, persistedPhotoURL)
+	if persistedOwnerID != owner.ID || !persistedLatitude.Valid || persistedLatitude.Float64 != -23.55052 || !persistedLongitude.Valid || persistedLongitude.Float64 != -46.633308 || !persistedPhotoURL.Valid || persistedPhotoURL.String != *uploadedArena.PhotoURL {
+		t.Errorf("persisted arena fields = (%d, %v, %v, %v), want authenticated owner, coordinates and uploaded photo reference", persistedOwnerID, persistedLatitude, persistedLongitude, persistedPhotoURL)
 	}
 
 	invalidLocationRequest := httptest.NewRequest(http.MethodPost, "/api/v1/arenas", bytes.NewBufferString(`{"name":"Invalid Arena","arena_type":"society","address":"Rua Um","city":"São Paulo","state":"SP","latitude":-23.5}`))

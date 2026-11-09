@@ -27,14 +27,12 @@ func TestNewArenaNormalizesDetails(t *testing.T) {
 	}
 }
 
-func TestNewArenaKeepsCoordinatesAndNormalizesPhotoURL(t *testing.T) {
+func TestNewArenaKeepsCoordinates(t *testing.T) {
 	latitude := -23.55052
 	longitude := -46.633308
-	photoURL := " https://images.example.test/arena.png "
 	details := validDetails()
 	details.Latitude = &latitude
 	details.Longitude = &longitude
-	details.PhotoURL = &photoURL
 
 	got, err := NewArena(17, details)
 	if err != nil {
@@ -43,18 +41,15 @@ func TestNewArenaKeepsCoordinatesAndNormalizesPhotoURL(t *testing.T) {
 	if got.Latitude == nil || *got.Latitude != latitude || got.Longitude == nil || *got.Longitude != longitude {
 		t.Errorf("NewArena() coordinates = (%v, %v), want (%v, %v)", got.Latitude, got.Longitude, latitude, longitude)
 	}
-	if got.PhotoURL == nil || *got.PhotoURL != "https://images.example.test/arena.png" {
-		t.Errorf("NewArena().PhotoURL = %v, want trimmed photo URL", got.PhotoURL)
-	}
 }
 
-func TestNewArenaAllowsMissingCoordinatesAndPhotoURL(t *testing.T) {
+func TestNewArenaAllowsMissingCoordinates(t *testing.T) {
 	got, err := NewArena(17, validDetails())
 	if err != nil {
 		t.Fatalf("NewArena() error = %v, want nil", err)
 	}
-	if got.Latitude != nil || got.Longitude != nil || got.PhotoURL != nil {
-		t.Errorf("NewArena() optional map details = (%v, %v, %v), want nil values", got.Latitude, got.Longitude, got.PhotoURL)
+	if got.Latitude != nil || got.Longitude != nil {
+		t.Errorf("NewArena() optional coordinates = (%v, %v), want nil values", got.Latitude, got.Longitude)
 	}
 }
 
@@ -117,32 +112,6 @@ func TestNewArenaAcceptsCoordinateBoundaries(t *testing.T) {
 
 	if _, err := NewArena(17, details); err != nil {
 		t.Errorf("NewArena() at valid geographic boundaries error = %v, want nil", err)
-	}
-}
-
-func TestNewArenaRejectsInvalidPhotoURL(t *testing.T) {
-	for _, photoURL := range []string{"javascript:alert(1)", "ftp://images.example.test/arena.png", "/images/arena.png", "https:///missing-host"} {
-		t.Run(photoURL, func(t *testing.T) {
-			details := validDetails()
-			details.PhotoURL = &photoURL
-			if _, err := NewArena(17, details); !errors.Is(err, ErrInvalidPhotoURL) {
-				t.Errorf("NewArena() error = %v, want %v", err, ErrInvalidPhotoURL)
-			}
-		})
-	}
-}
-
-func TestNewArenaTreatsBlankPhotoURLAsMissing(t *testing.T) {
-	photoURL := "  "
-	details := validDetails()
-	details.PhotoURL = &photoURL
-
-	got, err := NewArena(17, details)
-	if err != nil {
-		t.Fatalf("NewArena() error = %v, want nil", err)
-	}
-	if got.PhotoURL != nil {
-		t.Errorf("NewArena().PhotoURL = %q, want nil", *got.PhotoURL)
 	}
 }
 
@@ -475,28 +444,32 @@ func validDetails() Details {
 }
 
 type fakeRepository struct {
-	createdArena   Arena
-	savedArena     Arena
-	createCalls    int
-	createError    error
-	listedArenas   []Arena
-	listedOwnerID  int64
-	listCalls      int
-	listError      error
-	queriedArena   Arena
-	queriedArenaID int64
-	queriedOwnerID int64
-	getCalls       int
-	getError       error
-	updatedValue   Arena
-	updatedArena   Arena
-	updateCalls    int
-	updateError    error
-	toggleArenaID  int64
-	toggleOwnerID  int64
-	toggledArena   Arena
-	toggleCalls    int
-	toggleError    error
+	createdArena      Arena
+	savedArena        Arena
+	createCalls       int
+	createError       error
+	listedArenas      []Arena
+	listedOwnerID     int64
+	listCalls         int
+	listError         error
+	queriedArena      Arena
+	queriedArenaID    int64
+	queriedOwnerID    int64
+	getCalls          int
+	getError          error
+	updatedValue      Arena
+	updatedArena      Arena
+	updateCalls       int
+	updateError       error
+	photoUpdateCalls  int
+	photoUpdateURL    string
+	updatedPhotoArena Arena
+	photoUpdateError  error
+	toggleArenaID     int64
+	toggleOwnerID     int64
+	toggledArena      Arena
+	toggleCalls       int
+	toggleError       error
 }
 
 func (r *fakeRepository) Update(_ context.Context, value Arena) (Arena, error) {
@@ -506,6 +479,19 @@ func (r *fakeRepository) Update(_ context.Context, value Arena) (Arena, error) {
 		return Arena{}, r.updateError
 	}
 	return r.updatedArena, nil
+}
+
+func (r *fakeRepository) UpdatePhotoURL(_ context.Context, arenaID, ownerUserID int64, photoURL string) (Arena, error) {
+	r.photoUpdateCalls++
+	r.photoUpdateURL = photoURL
+	if r.photoUpdateError != nil {
+		return Arena{}, r.photoUpdateError
+	}
+	if r.updatedPhotoArena.ID == 0 {
+		r.updatedPhotoArena = Arena{ID: arenaID, OwnerUserID: ownerUserID}
+	}
+	r.updatedPhotoArena.PhotoURL = &photoURL
+	return r.updatedPhotoArena, nil
 }
 
 func (r *fakeRepository) ToggleActive(_ context.Context, arenaID, ownerUserID int64) (Arena, error) {

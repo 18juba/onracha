@@ -2,17 +2,24 @@ package arena
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 )
 
 // Service applies arena registration rules and persistence operations.
 type Service struct {
-	repository Repository
+	repository   Repository
+	photoStorage PhotoStorage
 }
 
 // NewService creates an arena service with its persistence dependency.
-func NewService(repository Repository) *Service {
-	return &Service{repository: repository}
+func NewService(repository Repository, photoStorage ...PhotoStorage) *Service {
+	service := &Service{repository: repository}
+	if len(photoStorage) > 0 {
+		service.photoStorage = photoStorage[0]
+	}
+	return service
 }
 
 // Create validates the submitted details and assigns the authenticated owner.
@@ -93,6 +100,56 @@ func (s *Service) ToggleActive(ctx context.Context, arenaID, ownerUserID int64) 
 	updatedArena, err := s.repository.ToggleActive(ctx, arenaID, ownerUserID)
 	if err != nil {
 		return Arena{}, fmt.Errorf("toggle arena active status: %w", err)
+	}
+	return updatedArena, nil
+}
+
+// ReplacePhoto stores a validated photo and updates the arena's reference for its owner.
+func (s *Service) ReplacePhoto(ctx context.Context, arenaID, ownerUserID int64, source io.Reader) (Arena, error) {
+	if arenaID <= 0 {
+		return Arena{}, ErrInvalidArenaID
+	}
+	if ownerUserID <= 0 {
+		return Arena{}, ErrInvalidOwner
+	}
+	if s.photoStorage == nil {
+		return Arena{}, ErrPhotoStorageUnavailable
+	}
+
+	currentArena, err := s.repository.GetByIDAndOwner(ctx, arenaID, ownerUserID)
+	if err != nil {
+		return Arena{}, fmt.Errorf("get arena before photo upload: %w", err)
+	}
+
+	photoURL, err := s.photoStorage.Store(ctx, source)
+	if err != nil {
+		return Arena{}, fmt.Errorf("store arena photo: %w", err)
+	}
+	photoReference, err := normalizePhotoURL(&photoURL)
+	if err == nil && photoReference == nil {
+		err = ErrInvalidPhotoURL
+	}
+	if err != nil {
+		cleanupErr := s.photoStorage.Delete(ctx, photoURL)
+		if cleanupErr != nil {
+			return Arena{}, errors.Join(fmt.Errorf("invalid stored photo URL: %w", err), fmt.Errorf("remove invalid stored photo: %w", cleanupErr))
+		}
+		return Arena{}, err
+	}
+
+	updatedArena, err := s.repository.UpdatePhotoURL(ctx, arenaID, ownerUserID, *photoReference)
+	if err != nil {
+		cleanupErr := s.photoStorage.Delete(ctx, *photoReference)
+		if cleanupErr != nil {
+			return Arena{}, errors.Join(fmt.Errorf("update arena photo reference: %w", err), fmt.Errorf("remove unreferenced photo: %w", cleanupErr))
+		}
+		return Arena{}, fmt.Errorf("update arena photo reference: %w", err)
+	}
+
+	if currentArena.PhotoURL != nil && *currentArena.PhotoURL != *photoReference {
+		if err := s.photoStorage.Delete(ctx, *currentArena.PhotoURL); err != nil {
+			return updatedArena, fmt.Errorf("%w: %w", ErrPhotoCleanup, err)
+		}
 	}
 	return updatedArena, nil
 }

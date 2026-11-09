@@ -42,7 +42,7 @@ Para encerrar, pressione `Ctrl+C`. Se os serviços foram iniciados em segundo pl
 docker compose down
 ```
 
-O volume `postgres_data` mantém os dados locais. `docker compose down -v` também apaga esse volume.
+Os volumes `postgres_data` e `arena_photos` mantêm os dados e as fotos locais. `docker compose down -v` também apaga esses volumes.
 
 ## Documentação
 

@@ -230,12 +230,6 @@ paths:
                   nullable: true
                   description: Longitude geográfica. Deve ser enviada junto com latitude.
                   example: -46.633308
-                photo_url:
-                  type: string
-                  format: uri
-                  nullable: true
-                  description: URL HTTP ou HTTPS da foto da arena.
-                  example: https://images.example.test/arena.png
       responses:
         '201':
           description: Arena cadastrada
@@ -363,12 +357,6 @@ paths:
                   nullable: true
                   description: Longitude geográfica. Deve ser enviada junto com latitude.
                   example: -46.633308
-                photo_url:
-                  type: string
-                  format: uri
-                  nullable: true
-                  description: URL HTTP ou HTTPS da foto da arena.
-                  example: https://images.example.test/arena.png
       responses:
         '200':
           description: Arena atualizada
@@ -441,6 +429,70 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/arenas/{id}/photo:
+    put:
+      summary: Envia ou substitui a foto da arena da conta autenticada
+      operationId: replaceArenaPhoto
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo JPEG ou PNG válido de até 5 MiB.
+      responses:
+        '200':
+          description: Arena atualizada com a referência pública da foto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Arena'
+        '400':
+          description: Multipart inválido ou arquivo que não é uma imagem JPEG/PNG válida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Arena inexistente ou pertencente a outra conta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Imagem maior que 5 MiB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno ao salvar a imagem ou atualizar a referência
           content:
             application/json:
               schema:
@@ -867,6 +919,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /uploads/{filename}:
+    get:
+      summary: Retorna uma foto pública de arena
+      operationId: getArenaPhoto
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{32}\.(jpg|png)$'
+      responses:
+        '200':
+          description: Arquivo de imagem
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Arquivo inexistente
 components:
   securitySchemes:
     cookieAuth:
@@ -932,6 +1009,7 @@ components:
           type: string
           format: uri
           nullable: true
+          readOnly: true
           example: https://images.example.test/arena.png
         active:
           type: boolean
@@ -1027,6 +1105,7 @@ components:
           type: string
           format: uri
           nullable: true
+          readOnly: true
     ErrorResponse:
       type: object
       required: [error]

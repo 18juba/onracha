@@ -118,7 +118,7 @@ func (r *ArenaRepository) Update(ctx context.Context, value arena.Arena) (arena.
 	const query = `
 		UPDATE arenas
 		SET name = $3, arena_type = $4, address = $5, city = $6, state = $7, active = $8,
-			latitude = $9, longitude = $10, photo_url = $11
+			latitude = $9, longitude = $10
 		WHERE id = $1 AND owner_user_id = $2
 		RETURNING id, owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url, created_at`
 
@@ -134,7 +134,6 @@ func (r *ArenaRepository) Update(ctx context.Context, value arena.Arena) (arena.
 		value.Active,
 		value.Latitude,
 		value.Longitude,
-		value.PhotoURL,
 	).Scan(
 		&updated.ID,
 		&updated.OwnerUserID,
@@ -153,6 +152,37 @@ func (r *ArenaRepository) Update(ctx context.Context, value arena.Arena) (arena.
 			return arena.Arena{}, arena.ErrNotFound
 		}
 		return arena.Arena{}, fmt.Errorf("update arena: %w", err)
+	}
+	return updated, nil
+}
+
+// UpdatePhotoURL replaces an arena's photo reference when it belongs to the supplied owner.
+func (r *ArenaRepository) UpdatePhotoURL(ctx context.Context, arenaID, ownerUserID int64, photoURL string) (arena.Arena, error) {
+	const query = `
+		UPDATE arenas
+		SET photo_url = $3
+		WHERE id = $1 AND owner_user_id = $2
+		RETURNING id, owner_user_id, name, arena_type, address, city, state, active, latitude, longitude, photo_url, created_at`
+
+	var updated arena.Arena
+	if err := r.db.QueryRowContext(ctx, query, arenaID, ownerUserID, photoURL).Scan(
+		&updated.ID,
+		&updated.OwnerUserID,
+		&updated.Name,
+		&updated.ArenaType,
+		&updated.Address,
+		&updated.City,
+		&updated.State,
+		&updated.Active,
+		&updated.Latitude,
+		&updated.Longitude,
+		&updated.PhotoURL,
+		&updated.CreatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return arena.Arena{}, arena.ErrNotFound
+		}
+		return arena.Arena{}, fmt.Errorf("update arena photo reference: %w", err)
 	}
 	return updated, nil
 }

@@ -81,20 +81,25 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		sessions = append(sessions, session)
 	}
 
-	arenaService := arena.NewService(postgres.NewArenaRepository(database))
+	arenaRepository := postgres.NewArenaRepository(database)
+	arenaService := arena.NewService(arenaRepository)
 	cities := []string{"São Paulo", "Campinas"}
 	latitudes := []float64{-23.55052, -22.9056}
 	longitudes := []float64{-46.633308, -47.0608}
-	photoURLs := []string{"https://images.example.test/sao-paulo.png", "https://images.example.test/campinas.png"}
 	for index, name := range []string{"First Test Arena", "Second Test Arena"} {
 		created, err := arenaService.Create(ctx, users[0].ID, arena.Details{
 			Name: name, ArenaType: "society", Address: "Rua do Esporte, 100", City: cities[index], State: "SP",
-			Latitude: &latitudes[index], Longitude: &longitudes[index], PhotoURL: &photoURLs[index],
+			Latitude: &latitudes[index], Longitude: &longitudes[index],
 		})
 		if err != nil {
 			t.Fatalf("create arena %d: %v", index, err)
 		}
 		arenas = append(arenas, created)
+	}
+	photoURL := "https://images.example.test/sao-paulo.png"
+	arenas[0], err = arenaRepository.UpdatePhotoURL(ctx, arenas[0].ID, users[0].ID, photoURL)
+	if err != nil {
+		t.Fatalf("set arena photo reference for game search: %v", err)
 	}
 
 	gameService := game.NewService(postgres.NewTimeSlotRepository(database), postgres.NewGameRepository(database))
@@ -316,7 +321,7 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		t.Errorf("filtered game IDs = [%d, %d], want [%d, %d]", cityAndDateGames[0].Game.ID, cityAndDateGames[1].Game.ID, firstGame.ID, secondGame.ID)
 	}
 	for _, value := range cityAndDateGames {
-		if value.Arena.City != "São Paulo" || value.Arena.ID != arenas[0].ID || value.Arena.Latitude == nil || *value.Arena.Latitude != latitudes[0] || value.Arena.Longitude == nil || *value.Arena.Longitude != longitudes[0] || value.Arena.PhotoURL == nil || *value.Arena.PhotoURL != photoURLs[0] {
+		if value.Arena.City != "São Paulo" || value.Arena.ID != arenas[0].ID || value.Arena.Latitude == nil || *value.Arena.Latitude != latitudes[0] || value.Arena.Longitude == nil || *value.Arena.Longitude != longitudes[0] || value.Arena.PhotoURL == nil || *value.Arena.PhotoURL != photoURL {
 			t.Errorf("search result arena = %+v, want arena %d in São Paulo", value.Arena, arenas[0].ID)
 		}
 	}

@@ -17,6 +17,7 @@ import (
 	"onracha/internal/auth"
 	"onracha/internal/game"
 	"onracha/internal/httpapi"
+	"onracha/internal/photostorage"
 	"onracha/internal/postgres"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -54,16 +55,28 @@ func run(logger *slog.Logger) error {
 	}
 	frontendOrigin := os.Getenv("FRONTEND_ORIGIN")
 	openAPISpecPath := os.Getenv("OPENAPI_SPEC_PATH")
+	photoDirectory := os.Getenv("PHOTO_STORAGE_DIR")
+	photoPublicURL := os.Getenv("PHOTO_PUBLIC_URL")
 	if frontendOrigin == "" {
 		frontendOrigin = "http://localhost:5173"
 	}
+	if photoDirectory == "" {
+		photoDirectory = "./uploads"
+	}
+	if photoPublicURL == "" {
+		photoPublicURL = "http://localhost:8080"
+	}
+	photoStorage, err := photostorage.NewLocalStorage(photoDirectory, photoPublicURL)
+	if err != nil {
+		return fmt.Errorf("configure local arena photo storage: %w", err)
+	}
 
 	authService := auth.NewService(postgres.NewAuthRepository(database), auth.NewArgon2idHasher())
-	arenaService := arena.NewService(postgres.NewArenaRepository(database))
+	arenaService := arena.NewService(postgres.NewArenaRepository(database), photoStorage)
 	gameService := game.NewService(postgres.NewTimeSlotRepository(database), postgres.NewGameRepository(database))
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           httpapi.NewRouter(authService, arenaService, gameService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies, OpenAPISpecPath: openAPISpecPath}),
+		Handler:           httpapi.NewRouter(authService, arenaService, gameService, logger, httpapi.Config{AllowedOrigin: frontendOrigin, SecureCookies: secureCookies, OpenAPISpecPath: openAPISpecPath, PhotoDirectory: photoStorage.Directory()}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
