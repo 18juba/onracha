@@ -1,1 +1,71 @@
 @import 'tailwindcss';
+
+:root {
+	color-scheme: dark;
+	--page-outside: #09070f;
+	--app-background: #15121e;
+	--surface: rgb(36 33 45 / 82%);
+	--surface-raised: #25212e;
+	--field-background: rgb(27 24 36 / 86%);
+	--text-primary: #f8f7fb;
+	--text-secondary: #aaa6b6;
+	--text-muted: #817c8e;
+	--accent: #09b0f4;
+	--accent-hover: #30baf6;
+	--accent-ink: #06272c;
+	--border: rgb(255 255 255 / 9%);
+	--focus-ring: rgb(9 176 244 / 24%);
+	--danger: #ff9f9f;
+	--success: #76e5bd;
+}
+
+:root[data-theme='light'] {
+	color-scheme: light;
+	--page-outside: #edf0f3;
+	--app-background: #fff;
+	--surface: rgb(246 249 250 / 92%);
+	--surface-raised: #f2f6f7;
+	--field-background: #f5f8f9;
+	--text-primary: #171923;
+	--text-secondary: #5e6571;
+	--text-muted: #7a828e;
+	--border: rgb(20 31 43 / 10%);
+	--danger: #ba3c49;
+	--success: #16865e;
+}
+
+html,
+body {
+	min-width: 320px;
+	min-height: 100%;
+	margin: 0;
+	background: var(--page-outside);
+}
+
+body {
+	color: var(--text-primary);
+	font-family:
+		Inter,
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		'Segoe UI',
+		sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input {
+	font: inherit;
+}
+
+button {
+	color: inherit;
+}
+
+::selection {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
