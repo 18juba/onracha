@@ -130,6 +130,58 @@ func TestLoginUsesGenericErrorForWrongPassword(t *testing.T) {
 	}
 }
 
+func TestLogoutWithEmptyTokenDoesNotDeleteSession(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository, &fakePasswordHasher{})
+
+	if err := service.Logout(context.Background(), ""); err != nil {
+		t.Fatalf("Logout() error = %v, want nil", err)
+	}
+	if repository.deleteSessionCalls != 0 {
+		t.Errorf("DeleteSession() calls = %d, want 0", repository.deleteSessionCalls)
+	}
+}
+
+func TestLogoutDeletesSessionByTokenHash(t *testing.T) {
+	token := "opaque-session-token"
+	tokenHash := sha256.Sum256([]byte(token))
+	otherTokenHash := sha256.Sum256([]byte("another-session-token"))
+	repository := &fakeRepository{
+		sessions: []fakeSession{
+			{tokenHash: append([]byte(nil), tokenHash[:]...)},
+			{tokenHash: append([]byte(nil), otherTokenHash[:]...)},
+		},
+	}
+	service := NewService(repository, &fakePasswordHasher{})
+
+	if err := service.Logout(context.Background(), token); err != nil {
+		t.Fatalf("Logout() error = %v, want nil", err)
+	}
+	if repository.deleteSessionCalls != 1 {
+		t.Fatalf("DeleteSession() calls = %d, want 1", repository.deleteSessionCalls)
+	}
+	if string(repository.deletedTokenHash) != string(tokenHash[:]) {
+		t.Error("Logout() should pass only the token hash to the repository")
+	}
+	if len(repository.sessions) != 1 || string(repository.sessions[0].tokenHash) != string(otherTokenHash[:]) {
+		t.Errorf("remaining sessions = %+v, want only the unrelated session", repository.sessions)
+	}
+}
+
+func TestLogoutReturnsRepositoryError(t *testing.T) {
+	repositoryError := errors.New("storage unavailable")
+	repository := &fakeRepository{deleteSessionErr: repositoryError}
+	service := NewService(repository, &fakePasswordHasher{})
+
+	err := service.Logout(context.Background(), "opaque-session-token")
+	if !errors.Is(err, repositoryError) {
+		t.Fatalf("Logout() error = %v, want wrapped repository error", err)
+	}
+	if repository.deleteSessionCalls != 1 {
+		t.Errorf("DeleteSession() calls = %d, want 1", repository.deleteSessionCalls)
+	}
+}
+
 func TestAuthenticateLoadsUserFromActiveSession(t *testing.T) {
 	user := User{ID: 42, Email: "lucas@example.com"}
 	token := base64.RawURLEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
@@ -158,18 +210,21 @@ func TestAuthenticateReturnsInvalidSessionWhenNotFound(t *testing.T) {
 }
 
 type fakeRepository struct {
-	createdUser       User
-	createErr         error
-	createCalls       int
-	savedUser         User
-	savedPasswordHash string
-	foundUser         User
-	foundPasswordHash string
-	findErr           error
-	sessions          []fakeSession
-	sessionUser       User
-	sessionTokenHash  []byte
-	sessionErr        error
+	createdUser        User
+	createErr          error
+	createCalls        int
+	savedUser          User
+	savedPasswordHash  string
+	foundUser          User
+	foundPasswordHash  string
+	findErr            error
+	sessions           []fakeSession
+	sessionUser        User
+	sessionTokenHash   []byte
+	sessionErr         error
+	deleteSessionErr   error
+	deleteSessionCalls int
+	deletedTokenHash   []byte
 }
 
 type fakeSession struct {
@@ -219,6 +274,12 @@ func (r *fakeRepository) FindUserBySession(_ context.Context, tokenHash []byte, 
 }
 
 func (r *fakeRepository) DeleteSession(_ context.Context, tokenHash []byte) error {
+	r.deleteSessionCalls++
+	r.deletedTokenHash = append([]byte(nil), tokenHash...)
+	if r.deleteSessionErr != nil {
+		return r.deleteSessionErr
+	}
+
 	activeSessions := r.sessions[:0]
 	for _, session := range r.sessions {
 		if string(session.tokenHash) != string(tokenHash) {
