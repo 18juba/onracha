@@ -23,6 +23,10 @@ bun run dev
 
 Abra <http://localhost:5173>.
 
+## Identidade visual
+
+Consulte [`docs/style-guide.md`](docs/style-guide.md) para as decisões de cores, temas, navegação, mapa e componentes.
+
 ## Verificações e testes
 
 ```bash
