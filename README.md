@@ -1,4 +1,4 @@
-# ONRACHA
+# ONRACHA - PROJETO B
 
 Plataforma em desenvolvimento para cadastrar arenas, organizar e encontrar jogos para participar.
 
