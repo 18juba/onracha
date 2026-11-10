@@ -52,7 +52,8 @@ const apiBaseURL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').rep
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 	const headers = new Headers(init.headers);
-	if (init.body && !headers.has('Content-Type')) {
+	const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
+	if (init.body && !isFormData && !headers.has('Content-Type')) {
 		headers.set('Content-Type', 'application/json');
 	}
 
@@ -112,6 +113,16 @@ export const api = {
 		return request('/api/v1/arenas', {
 			method: 'POST',
 			body: JSON.stringify(input)
+		});
+	},
+
+	replaceArenaPhoto(arenaID: number, file: File): Promise<Arena> {
+		const formData = new FormData();
+		formData.append('file', file);
+
+		return request(`/api/v1/arenas/${arenaID}/photo`, {
+			method: 'PUT',
+			body: formData
 		});
 	}
 };

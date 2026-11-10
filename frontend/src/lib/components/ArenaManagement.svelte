@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import {
 		AlertCircle,
 		ArrowLeft,
 		ArrowRight,
 		Building2,
 		Check,
+		ImagePlus,
 		LoaderCircle,
 		MapPin,
-		Plus
+		Plus,
+		X
 	} from '@lucide/svelte';
 	import { api, type Arena } from '../api';
 	import { getUserFacingErrorMessage } from '../errors';
@@ -26,6 +28,8 @@
 		{ value: 'campo', label: 'Campo' },
 		{ value: 'poliesportiva', label: 'Poliesportiva' }
 	];
+	const maxPhotoSize = 5 * 1024 * 1024;
+	const supportedPhotoTypes = ['image/jpeg', 'image/png'];
 	const brazilianStates = [
 		{ value: 'AC', label: 'Acre' },
 		{ value: 'AL', label: 'Alagoas' },
@@ -70,9 +74,18 @@
 	let city = $state('');
 	let stateCode = $state('');
 	let selectedLocation = $state<Coordinates | null>(null);
+	let selectedPhoto = $state<File | null>(null);
+	let photoPreview = $state('');
+	let photoError = $state('');
+	let photoInputKey = $state(0);
+	let pendingPhotoArena = $state<Arena | null>(null);
 
 	onMount(() => {
 		void loadArenas();
+	});
+
+	onDestroy(() => {
+		if (photoPreview) URL.revokeObjectURL(photoPreview);
 	});
 
 	async function loadArenas() {
@@ -97,7 +110,40 @@
 	function showLocationPicker(event: SubmitEvent) {
 		event.preventDefault();
 		formError = '';
+		photoError = '';
 		screen = 'location';
+	}
+
+	function selectPhoto(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		if (file.size > maxPhotoSize) {
+			photoError = 'A foto deve ter no máximo 5 MB.';
+			input.value = '';
+			return;
+		}
+
+		if (file.type && !supportedPhotoTypes.includes(file.type)) {
+			photoError = 'Escolha uma imagem JPEG ou PNG.';
+			input.value = '';
+			return;
+		}
+
+		if (photoPreview) URL.revokeObjectURL(photoPreview);
+		selectedPhoto = file;
+		photoPreview = URL.createObjectURL(file);
+		photoError = '';
+		formError = '';
+	}
+
+	function clearPhoto() {
+		selectedPhoto = null;
+		photoError = '';
+		if (photoPreview) URL.revokeObjectURL(photoPreview);
+		photoPreview = '';
+		photoInputKey += 1;
 	}
 
 	function selectLocation(location: Coordinates) {
@@ -113,27 +159,64 @@
 		stateCode = '';
 		selectedLocation = null;
 		formError = '';
+		photoError = '';
+		clearPhoto();
 	}
 
 	async function createArena() {
-		if (!selectedLocation || isSaving) return;
+		const location = selectedLocation;
+		if ((!location && !pendingPhotoArena) || isSaving) return;
 
 		isSaving = true;
 		formError = '';
 
 		try {
+			if (pendingPhotoArena) {
+				if (!selectedPhoto) return;
+
+				let arenaWithPhoto: Arena;
+				try {
+					arenaWithPhoto = await api.replaceArenaPhoto(pendingPhotoArena.id, selectedPhoto);
+				} catch (error) {
+					formError = `Não foi possível enviar a foto. ${getUserFacingErrorMessage(error, 'Tente novamente.')}`;
+					return;
+				}
+
+				arenas = arenas.map((arena) => (arena.id === arenaWithPhoto.id ? arenaWithPhoto : arena));
+				pendingPhotoArena = null;
+				successMessage = 'Arena cadastrada com foto.';
+				resetForm();
+				screen = 'list';
+				return;
+			}
+
+			if (!location) return;
+
 			const createdArena = await api.createArena({
 				name: name.trim(),
 				arena_type: arenaType,
 				address: address.trim(),
 				city: city.trim(),
 				state: stateCode.trim().toUpperCase(),
-				latitude: selectedLocation.latitude,
-				longitude: selectedLocation.longitude
+				latitude: location.latitude,
+				longitude: location.longitude
 			});
 
-			arenas = [createdArena, ...arenas];
-			successMessage = 'Arena cadastrada.';
+			if (selectedPhoto) {
+				try {
+					const arenaWithPhoto = await api.replaceArenaPhoto(createdArena.id, selectedPhoto);
+					arenas = [arenaWithPhoto, ...arenas];
+				} catch (error) {
+					arenas = [createdArena, ...arenas];
+					pendingPhotoArena = createdArena;
+					formError = `A arena foi cadastrada, mas a foto não foi enviada. ${getUserFacingErrorMessage(error, 'Tente novamente.')}`;
+					return;
+				}
+			} else {
+				arenas = [createdArena, ...arenas];
+			}
+
+			successMessage = selectedPhoto ? 'Arena cadastrada com foto.' : 'Arena cadastrada.';
 			resetForm();
 			screen = 'list';
 		} catch (error) {
@@ -141,6 +224,24 @@
 		} finally {
 			isSaving = false;
 		}
+	}
+
+	function finishWithoutPhoto() {
+		if (!pendingPhotoArena) return;
+
+		pendingPhotoArena = null;
+		successMessage = 'Arena cadastrada sem foto.';
+		resetForm();
+		screen = 'list';
+	}
+
+	function backToArenaList() {
+		if (pendingPhotoArena) {
+			finishWithoutPhoto();
+			return;
+		}
+
+		screen = 'list';
 	}
 </script>
 
@@ -292,8 +393,10 @@
 			<button
 				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
 				type="button"
-				aria-label="Voltar para arenas"
-				onclick={() => (screen = 'list')}
+				aria-label={pendingPhotoArena
+					? 'Concluir sem foto e voltar para arenas'
+					: 'Voltar para arenas'}
+				onclick={backToArenaList}
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
 			</button>
@@ -334,6 +437,60 @@
 						{/each}
 					</select>
 				</label>
+
+				<div class="grid gap-2 text-sm font-medium">
+					<span
+						>Foto da arena <span class="font-normal text-[var(--text-secondary)]">(opcional)</span
+						></span
+					>
+					<div
+						class="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
+					>
+						<div
+							class="grid size-20 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--surface-raised)] text-[var(--accent)]"
+						>
+							{#if photoPreview}
+								<img
+									src={photoPreview}
+									alt="Pré-visualização da foto da arena"
+									class="size-full object-cover"
+								/>
+							{:else}
+								<ImagePlus size={28} strokeWidth={1.7} aria-hidden="true" />
+							{/if}
+						</div>
+						<div class="flex min-w-0 flex-col items-start gap-1">
+							<label
+								class="inline-flex min-h-10 cursor-pointer items-center rounded-xl px-3 text-sm font-semibold text-[var(--accent)] transition-colors focus-within:ring-4 focus-within:ring-[var(--focus-ring)] hover:bg-[var(--focus-ring)]"
+							>
+								{#key photoInputKey}
+									<input
+										class="sr-only"
+										type="file"
+										name="photo"
+										accept="image/jpeg,image/png"
+										onchange={selectPhoto}
+									/>
+								{/key}
+								<span>{selectedPhoto ? 'Trocar foto' : 'Adicionar foto'}</span>
+							</label>
+							{#if selectedPhoto}
+								<button
+									class="inline-flex min-h-9 items-center gap-1 rounded-xl px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+									type="button"
+									onclick={clearPhoto}
+								>
+									<X size={14} aria-hidden="true" />
+									Remover foto
+								</button>
+							{/if}
+						</div>
+					</div>
+					<p class="text-xs font-normal text-[var(--text-secondary)]">JPEG ou PNG · até 5 MB</p>
+					{#if photoError}
+						<p class="text-xs font-normal text-[var(--text-primary)]" role="alert">{photoError}</p>
+					{/if}
+				</div>
 
 				<label class="grid gap-2 text-sm font-medium">
 					<span>Endereço</span>
@@ -448,7 +605,9 @@
 			<button
 				class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
 				type="button"
-				disabled={!selectedLocation || isSaving}
+				disabled={(!selectedLocation && !pendingPhotoArena) ||
+					(pendingPhotoArena !== null && !selectedPhoto) ||
+					isSaving}
 				onclick={createArena}
 			>
 				{#if isSaving}
@@ -460,9 +619,18 @@
 					<span>Cadastrando arena</span>
 				{:else}
 					<Check size={19} aria-hidden="true" />
-					<span>Cadastrar arena</span>
+					<span>{pendingPhotoArena ? 'Tentar enviar foto' : 'Cadastrar arena'}</span>
 				{/if}
 			</button>
+			{#if pendingPhotoArena}
+				<button
+					class="mt-2 min-h-11 w-full rounded-2xl px-4 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+					type="button"
+					onclick={finishWithoutPhoto}
+				>
+					Concluir sem foto
+				</button>
+			{/if}
 		</footer>
 	</section>
 {/if}
