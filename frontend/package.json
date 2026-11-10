@@ -43,6 +43,7 @@
 		"vitest": "^4.1.8"
 	},
 	"dependencies": {
+		"@fontsource-variable/noto-sans-bengali": "^5.3.0",
 		"@lucide/svelte": "^1.70.0",
 		"leaflet": "^1.9.4",
 		"sveaflet": "^0.1.5"
