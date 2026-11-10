@@ -1,4 +1,4 @@
-export type OnboardingScreen = 'welcome' | 'email' | 'password' | 'register' | 'success';
+export type OnboardingScreen = 'welcome' | 'email' | 'password' | 'register';
 export type ChoiceScreen = Extract<OnboardingScreen, 'email' | 'register'>;
 
 export function getChoiceScreen(hasAccount: boolean): ChoiceScreen {
