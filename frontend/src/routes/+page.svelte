@@ -124,7 +124,7 @@
 			await api.login({ email: registration.email, password });
 			password = '';
 			passwordConfirmation = '';
-			await goto(resolve('/(app)/buscar'));
+			await goto(resolve('/(app)/onboarding'), { replace: true });
 		} catch (error) {
 			if (accountWasCreated) {
 				name = '';

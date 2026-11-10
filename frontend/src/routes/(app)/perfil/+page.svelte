@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { LoaderCircle, LogOut, Moon, Sun, UserRound } from '@lucide/svelte';
+	import { ArrowRight, BookOpen, LoaderCircle, LogOut, Moon, Sun, UserRound } from '@lucide/svelte';
 	import { api } from '../../../lib/api';
 	import { getAppContext } from '../../../lib/app-context';
 	import Button from '../../../lib/components/ui/Button.svelte';
@@ -14,6 +14,10 @@
 
 	function handleThemeToggle() {
 		appState.theme = toggleTheme(appState.theme, document.documentElement, window.localStorage);
+	}
+
+	function openOnboarding() {
+		void goto(resolve('/(app)/onboarding'), { state: { onboardingReturnToProfile: true } });
 	}
 
 	async function handleLogout() {
@@ -84,6 +88,16 @@
 					<Moon size={18} aria-hidden="true" />
 					<span>Ativar tema escuro</span>
 				{/if}
+			</Button>
+		</section>
+		<section class="grid gap-3" aria-labelledby="profile-onboarding-title">
+			<h2 id="profile-onboarding-title" class="text-sm font-semibold text-[var(--text-secondary)]">
+				Primeiros passos
+			</h2>
+			<Button variant="outline" class="w-full justify-start" onclick={openOnboarding}>
+				<BookOpen size={18} aria-hidden="true" />
+				<span>Refazer tutorial de início</span>
+				<ArrowRight size={16} class="ml-auto text-[var(--text-muted)]" aria-hidden="true" />
 			</Button>
 		</section>
 
