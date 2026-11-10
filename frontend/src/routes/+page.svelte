@@ -143,7 +143,7 @@
 </svelte:head>
 
 {#if screen === 'success'}
-	<MainApp user={currentUser} />
+	<MainApp user={currentUser} {theme} />
 {:else}
 	<main
 		class="grid min-h-svh w-full place-items-center bg-[var(--page-outside)] px-0 py-0 sm:px-6 sm:py-6"
