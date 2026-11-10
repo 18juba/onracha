@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { LocateFixed, LoaderCircle, Minus, Plus } from '@lucide/svelte';
+	import { LocateFixed, LoaderCircle, Minus, Plus, RefreshCw } from '@lucide/svelte';
+	import { api, type DiscoveredArena } from '../api';
 	import type { Theme } from '../theme';
 
 	type Coordinates = { latitude: number; longitude: number };
@@ -13,6 +14,10 @@
 		selectable?: boolean;
 		selectedLocation?: Coordinates | null;
 		onSelectLocation?: (location: Coordinates) => void;
+		discoverArenas?: boolean;
+		gameAvailabilityVersion?: number;
+		onArenaSelect?: (arena: DiscoveredArena) => void;
+		onArenasChange?: (arenas: DiscoveredArena[]) => void;
 	};
 
 	const CITY_ZOOM = 12.5;
@@ -23,21 +28,38 @@
 		theme,
 		selectable = false,
 		selectedLocation = null,
-		onSelectLocation = () => {}
+		onSelectLocation = () => {},
+		discoverArenas = false,
+		gameAvailabilityVersion = 0,
+		onArenaSelect = () => {},
+		onArenasChange = () => {}
 	}: Props = $props();
 	let locationStatus = $state<'loading' | 'ready' | 'error'>('loading');
 	let locationMessage = $state('');
 	let mapLoadError = $state(false);
+	let arenaDiscoveryStatus = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+	let discoveredArenaCount = $state(0);
 	let mapControls = $state({
 		requestUserLocation: () => {},
+		searchArenas: () => {},
+		refreshGameAvailability: () => {},
 		zoomIn: () => {},
 		zoomOut: () => {},
 		centerOnUser: () => {}
 	});
 
+	// Sync the non-Svelte Leaflet markers after a game is booked or joined.
+	$effect(() => {
+		if (discoverArenas && gameAvailabilityVersion > 0) {
+			mapControls.refreshGameAvailability();
+		}
+	});
+
 	function attachMap(element: HTMLDivElement) {
 		let disposed = false;
 		let requestNumber = 0;
+		let discoveryRequestNumber = 0;
+		let discoveryTimer: ReturnType<typeof setTimeout> | undefined;
 		let locationRequestStarted = false;
 		let userLocation: UserLocation | null = null;
 		let currentSelection = selectedLocation;
@@ -46,6 +68,206 @@
 		let userMarker: import('leaflet').Marker | undefined;
 		let selectionMarker: import('leaflet').Marker | undefined;
 		let accuracyCircle: import('leaflet').Circle | undefined;
+		const arenaMarkers: { id: number; marker: import('leaflet').Marker }[] = [];
+		let availableGameCounts: Record<number, number> = {};
+		let discoveredArenas: DiscoveredArena[] = [];
+
+		function arenaMarkerIcon(arena: DiscoveredArena) {
+			if (!leaflet || !map) return undefined;
+
+			const size = Math.max(34, Math.min(68, Math.round(28 + (map.getZoom() - 8) * 4)));
+			const showName = map.getZoom() >= 16;
+			const nameCardHeight = showName ? 34 : 0;
+			const gameCount = availableGameCounts[arena.id] ?? 0;
+			const photoURL = typeof arena.photo_url === 'string' ? arena.photo_url.trim() : '';
+			const markerContent = document.createElement('span');
+			markerContent.className = 'onracha-arena-marker';
+			markerContent.style.width = `${size}px`;
+			markerContent.style.height = `${size + nameCardHeight}px`;
+			markerContent.setAttribute('aria-label', arena.name);
+
+			const photo = document.createElement('span');
+			photo.className = 'onracha-arena-marker__photo';
+			photo.style.width = `${size}px`;
+			photo.style.height = `${size}px`;
+
+			const fallback = document.createElement('span');
+			fallback.className = 'onracha-arena-marker__fallback';
+			fallback.setAttribute('aria-hidden', 'true');
+			fallback.textContent = '⚽';
+			photo.append(fallback);
+
+			if (photoURL) {
+				const image = document.createElement('img');
+				image.alt = '';
+				image.decoding = 'async';
+				image.dataset.photoSrc = photoURL;
+				photo.append(image);
+			}
+
+			markerContent.append(photo);
+
+			if (gameCount > 0) {
+				const badge = document.createElement('span');
+				badge.className = 'onracha-arena-marker__games';
+				badge.setAttribute('aria-hidden', 'true');
+				badge.textContent = gameCount > 9 ? '9+' : String(gameCount);
+				markerContent.append(badge);
+			}
+
+			if (showName) {
+				const nameCard = document.createElement('span');
+				nameCard.className = 'onracha-arena-marker__label';
+				nameCard.style.top = `${size + 5}px`;
+				nameCard.textContent = arena.name;
+				markerContent.append(nameCard);
+			}
+
+			const iconHeight = size + nameCardHeight;
+
+			return leaflet.divIcon({
+				className: 'onracha-arena-marker-icon',
+				html: markerContent,
+				iconSize: [size, iconHeight],
+				iconAnchor: [size / 2, size / 2]
+			});
+		}
+
+		function loadArenaMarkerPhoto(marker: import('leaflet').Marker) {
+			const markerElement = marker.getElement();
+			const image = markerElement?.querySelector<HTMLImageElement>(
+				'.onracha-arena-marker__photo img'
+			);
+			const fallback = markerElement?.querySelector<HTMLElement>('.onracha-arena-marker__fallback');
+			const photoSrc = image?.dataset.photoSrc;
+
+			if (!image || !fallback || !photoSrc || image.dataset.photoRequested === 'true') return;
+
+			image.dataset.photoRequested = 'true';
+			image.addEventListener(
+				'load',
+				() => {
+					fallback.hidden = true;
+				},
+				{ once: true }
+			);
+			image.addEventListener(
+				'error',
+				() => {
+					image.remove();
+					fallback.hidden = false;
+				},
+				{ once: true }
+			);
+			image.src = photoSrc;
+		}
+
+		function refreshArenaMarkerIcons() {
+			if (!leaflet) return;
+			for (const entry of arenaMarkers) {
+				const arena = discoveredArenas.find((value) => value.id === entry.id);
+				const icon = arena ? arenaMarkerIcon(arena) : undefined;
+				if (icon) {
+					entry.marker.setIcon(icon);
+					loadArenaMarkerPhoto(entry.marker);
+				}
+			}
+		}
+
+		function updateArenaMarkers(arenas: DiscoveredArena[]) {
+			if (!map || !leaflet) return;
+			const nextIDs: number[] = [];
+
+			for (const arena of arenas) {
+				if (arena.latitude === null || arena.longitude === null) continue;
+				nextIDs.push(arena.id);
+				const position: [number, number] = [arena.latitude, arena.longitude];
+				const icon = arenaMarkerIcon(arena);
+				if (!icon) continue;
+
+				const existingMarker = arenaMarkers.find((entry) => entry.id === arena.id)?.marker;
+				if (existingMarker) {
+					existingMarker.setLatLng(position);
+					existingMarker.setIcon(icon);
+					loadArenaMarkerPhoto(existingMarker);
+					existingMarker.off('click');
+					existingMarker.on('click', () => onArenaSelect(arena));
+				} else {
+					const marker = leaflet
+						.marker(position, {
+							icon,
+							title: arena.name,
+							alt: `Abrir detalhes da arena ${arena.name}`
+						})
+						.addTo(map);
+					loadArenaMarkerPhoto(marker);
+					marker.on('click', () => onArenaSelect(arena));
+					arenaMarkers.push({ id: arena.id, marker });
+				}
+			}
+
+			for (let index = arenaMarkers.length - 1; index >= 0; index -= 1) {
+				if (!nextIDs.includes(arenaMarkers[index].id)) {
+					arenaMarkers[index].marker.remove();
+					arenaMarkers.splice(index, 1);
+				}
+			}
+		}
+
+		async function loadAvailableGameCounts() {
+			try {
+				const results = await api.listAvailableGames();
+				if (disposed) return;
+				availableGameCounts = {};
+				for (const result of results) {
+					const arenaID = result.arena.id;
+					availableGameCounts[arenaID] = (availableGameCounts[arenaID] ?? 0) + 1;
+				}
+				refreshArenaMarkerIcons();
+			} catch {
+				// The arena map remains useful even when game discovery is unavailable.
+			}
+		}
+
+		function arenaSearchRadiusKM() {
+			if (!map) return 25;
+			const center = map.getCenter();
+			const radius = map.distance(center, map.getBounds().getNorthEast()) / 1000;
+			return Math.min(100, Math.max(25, Math.ceil(radius)));
+		}
+
+		async function loadArenasForCurrentMap() {
+			if (!discoverArenas || !map) return;
+			const currentRequest = ++discoveryRequestNumber;
+			const center = map.getCenter();
+			arenaDiscoveryStatus = 'loading';
+
+			try {
+				const arenas = await api.discoverArenas({
+					latitude: center.lat,
+					longitude: center.lng,
+					radius_km: arenaSearchRadiusKM()
+				});
+				if (disposed || currentRequest !== discoveryRequestNumber) return;
+				discoveredArenas = arenas;
+				discoveredArenaCount = arenas.filter(
+					(arena) => arena.latitude !== null && arena.longitude !== null
+				).length;
+				arenaDiscoveryStatus = 'ready';
+				updateArenaMarkers(arenas);
+				onArenasChange(arenas);
+			} catch {
+				if (!disposed && currentRequest === discoveryRequestNumber) {
+					arenaDiscoveryStatus = 'error';
+				}
+			}
+		}
+
+		function scheduleArenaSearch() {
+			if (!discoverArenas) return;
+			if (discoveryTimer) clearTimeout(discoveryTimer);
+			discoveryTimer = setTimeout(() => void loadArenasForCurrentMap(), 350);
+		}
 
 		function showSelectedLocation(location: Coordinates) {
 			currentSelection = location;
@@ -148,6 +370,8 @@
 		}
 
 		mapControls.requestUserLocation = locateUser;
+		mapControls.searchArenas = () => void loadArenasForCurrentMap();
+		mapControls.refreshGameAvailability = () => void loadAvailableGameCounts();
 		mapControls.centerOnUser = () => {
 			if (!userLocation) {
 				locateUser();
@@ -185,6 +409,11 @@
 
 			mapControls.zoomIn = () => map?.zoomIn();
 			mapControls.zoomOut = () => map?.zoomOut();
+			if (discoverArenas) {
+				map.on('moveend', scheduleArenaSearch);
+				map.on('zoomend', refreshArenaMarkerIcons);
+				void loadAvailableGameCounts();
+			}
 			window.requestAnimationFrame(() => map?.invalidateSize());
 
 			if (selectable) {
@@ -200,6 +429,7 @@
 
 			if (currentSelection) showSelectedLocation(currentSelection);
 			if (userLocation) showUserLocation(userLocation);
+			if (discoverArenas) scheduleArenaSearch();
 			if (!locationRequestStarted) locateUser();
 		}
 
@@ -210,8 +440,12 @@
 		return () => {
 			disposed = true;
 			requestNumber += 1;
+			discoveryRequestNumber += 1;
+			if (discoveryTimer) clearTimeout(discoveryTimer);
 			map?.remove();
 			mapControls.requestUserLocation = () => {};
+			mapControls.searchArenas = () => {};
+			mapControls.refreshGameAvailability = () => {};
 			mapControls.zoomIn = () => {};
 			mapControls.zoomOut = () => {};
 			mapControls.centerOnUser = () => {};
@@ -280,6 +514,39 @@
 			>
 				Tentar localizar
 			</button>
+		</div>
+	{/if}
+
+	{#if discoverArenas && locationStatus !== 'loading'}
+		<div
+			class="absolute bottom-4 left-4 z-[500] flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3.5 text-xs font-medium text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
+			aria-live="polite"
+		>
+			{#if arenaDiscoveryStatus === 'loading'}
+				<LoaderCircle
+					size={14}
+					class="animate-spin text-[var(--accent)] motion-reduce:animate-none"
+					aria-hidden="true"
+				/>
+				<span>Procurando arenas</span>
+			{:else if arenaDiscoveryStatus === 'error'}
+				<span>Busca indisponível</span>
+				<button
+					class="grid size-8 place-items-center rounded-full text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+					type="button"
+					aria-label="Tentar buscar arenas novamente"
+					onclick={mapControls.searchArenas}
+				>
+					<RefreshCw size={14} aria-hidden="true" />
+				</button>
+			{:else if arenaDiscoveryStatus === 'ready'}
+				<span class="size-2 rounded-full bg-[var(--accent)]" aria-hidden="true"></span>
+				<span>
+					{discoveredArenaCount === 0
+						? 'Nenhuma arena por aqui'
+						: `${discoveredArenaCount} ${discoveredArenaCount === 1 ? 'arena' : 'arenas'} na área`}
+				</span>
+			{/if}
 		</div>
 	{/if}
 
@@ -393,9 +660,115 @@
 		content: '';
 	}
 
+	:global(.onracha-arena-marker-icon) {
+		border: 0;
+		background: transparent;
+	}
+
+	:global(.onracha-arena-marker) {
+		position: relative;
+		display: block;
+		overflow: visible;
+		animation: onracha-marker-pop 220ms ease-out both;
+	}
+
+	:global(.onracha-arena-marker__photo) {
+		position: absolute;
+		top: 0;
+		left: 0;
+		display: block;
+		box-sizing: border-box;
+		isolation: isolate;
+		border: 3px solid var(--app-background);
+		border-radius: 9999px;
+		background: var(--surface-raised);
+		overflow: hidden;
+		box-shadow:
+			0 3px 16px rgb(0 0 0 / 35%),
+			0 0 0 2px var(--accent);
+	}
+
+	:global(.onracha-arena-marker img) {
+		position: absolute;
+		top: 0;
+		left: 0;
+		display: block;
+		width: 100%;
+		height: 100%;
+		max-width: none;
+		border-radius: 50%;
+		object-fit: cover;
+		object-position: center;
+	}
+
+	:global(.onracha-arena-marker__fallback) {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		display: grid;
+		place-items: center;
+		font-size: 22px;
+	}
+
+	:global(.onracha-arena-marker__fallback[hidden]) {
+		display: none;
+	}
+
+	:global(.onracha-arena-marker__games) {
+		position: absolute;
+		top: -5px;
+		right: -6px;
+		display: grid;
+		min-width: 19px;
+		height: 19px;
+		place-items: center;
+		border: 2px solid var(--app-background);
+		border-radius: 9999px;
+		background: var(--accent);
+		padding: 0 4px;
+		color: #07121a;
+		font-size: 10px;
+		font-weight: 800;
+		line-height: 1;
+	}
+
+	:global(.onracha-arena-marker__label) {
+		position: absolute;
+		left: 50%;
+		width: max-content;
+		max-width: 180px;
+		transform: translateX(-50%);
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+		padding: 6px 10px;
+		color: var(--text-primary);
+		font-size: 11px;
+		font-weight: 700;
+		line-height: 16px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+		backdrop-filter: blur(12px);
+	}
+
+	@keyframes onracha-marker-pop {
+		from {
+			transform: scale(0.82);
+		}
+		to {
+			transform: scale(1);
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.map-surface :global(.leaflet-tile-pane) {
 			transition: none;
+		}
+
+		:global(.onracha-arena-marker) {
+			animation: none;
 		}
 	}
 </style>

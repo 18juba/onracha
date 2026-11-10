@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { CalendarDays, UserRound } from '@lucide/svelte';
-	import type { User } from '../api';
+	import { UserRound } from '@lucide/svelte';
+	import type { DiscoveredArena, User } from '../api';
 	import type { Theme } from '../theme';
+	import ArenaDetails from './ArenaDetails.svelte';
 	import ArenaManagement from './ArenaManagement.svelte';
 	import BottomNavigation from './BottomNavigation.svelte';
 	import MapView from './MapView.svelte';
+	import MyGames from './MyGames.svelte';
 
 	type MainTab = 'buscar' | 'jogos' | 'arenas' | 'perfil';
 	type Props = {
@@ -14,9 +16,34 @@
 
 	let { user, theme }: Props = $props();
 	let activeTab = $state<MainTab>('buscar');
+	let selectedArena = $state<DiscoveredArena | null>(null);
+	let discoveredArenas = $state<DiscoveredArena[]>([]);
+	let gameAvailabilityVersion = $state(0);
 
 	function selectTab(tab: MainTab) {
+		selectedArena = null;
 		activeTab = tab;
+	}
+
+	function selectArena(arena: DiscoveredArena) {
+		selectedArena = arena;
+	}
+
+	function refreshGameAvailability() {
+		gameAvailabilityVersion += 1;
+	}
+
+	function rememberDiscoveredArenas(arenas: DiscoveredArena[]) {
+		const knownArenas = [...discoveredArenas];
+		for (const arena of arenas) {
+			const existingIndex = knownArenas.findIndex((knownArena) => knownArena.id === arena.id);
+			if (existingIndex === -1) {
+				knownArenas.push(arena);
+			} else {
+				knownArenas[existingIndex] = arena;
+			}
+		}
+		discoveredArenas = knownArenas;
 	}
 </script>
 
@@ -31,20 +58,20 @@
 				class={`absolute inset-0 flex ${activeTab === 'buscar' ? 'visible z-0' : 'pointer-events-none invisible -z-10'}`}
 				inert={activeTab !== 'buscar'}
 			>
-				<MapView {theme} />
+				<MapView
+					{theme}
+					discoverArenas
+					{gameAvailabilityVersion}
+					onArenaSelect={selectArena}
+					onArenasChange={rememberDiscoveredArenas}
+				/>
 			</div>
 			{#if activeTab === 'jogos'}
-				<section
-					class="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-[var(--app-background)]"
-				>
-					<CalendarDays
-						size={34}
-						strokeWidth={1.7}
-						class="text-[var(--accent)]"
-						aria-hidden="true"
-					/>
-					<h1 class="text-2xl font-semibold tracking-tight">Jogos</h1>
-				</section>
+				<MyGames
+					arenas={discoveredArenas}
+					userID={user?.id ?? null}
+					onFindArenas={() => selectTab('buscar')}
+				/>
 			{:else if activeTab === 'arenas'}
 				<ArenaManagement {theme} />
 			{:else if activeTab === 'perfil'}
@@ -57,6 +84,15 @@
 						<p class="text-sm text-[var(--text-secondary)]">{user.email}</p>
 					{/if}
 				</section>
+			{/if}
+			{#if activeTab === 'buscar' && selectedArena}
+				{#key selectedArena.id}
+					<ArenaDetails
+						arena={selectedArena}
+						onClose={() => (selectedArena = null)}
+						onGamesChanged={refreshGameAvailability}
+					/>
+				{/key}
 			{/if}
 		</main>
 
