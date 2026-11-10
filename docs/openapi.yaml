@@ -607,7 +607,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     post:
-      summary: Cadastra um horário na arena
+      summary: Cadastra ou reabre um horário na arena
+      description: Se já existir um horário encerrado com o mesmo início e fim, reabre esse registro. Uma sobreposição gera conflito somente com outro horário aberto.
       operationId: createArenaTimeSlot
       security:
         - cookieAuth: []
@@ -638,7 +639,7 @@ paths:
                   example: '2026-12-12T20:00:00-03:00'
       responses:
         '201':
-          description: Horário cadastrado
+          description: Horário cadastrado ou reaberto
           content:
             application/json:
               schema:
@@ -662,7 +663,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: O horário sobrepõe outro horário cadastrado na arena
+          description: O horário sobrepõe outro horário aberto na arena
           content:
             application/json:
               schema:

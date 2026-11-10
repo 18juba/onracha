@@ -98,8 +98,10 @@
 				starts_at: startsAt.toISOString(),
 				ends_at: endsAt.toISOString()
 			});
-			slots = sortManagedSlots([...slots, { ...createdSlot, game_id: null }]);
-			successMessage = 'Horário liberado para novos jogos.';
+			const existingSlot = slots.find((slot) => slot.id === createdSlot.id);
+			const openedSlot = { ...createdSlot, game_id: existingSlot?.game_id ?? null };
+			slots = sortManagedSlots([...slots.filter((slot) => slot.id !== createdSlot.id), openedSlot]);
+			successMessage = existingSlot ? 'Horário reaberto.' : 'Horário liberado para novos jogos.';
 			startTime = '';
 			endTime = '';
 		} catch (error) {

@@ -587,6 +587,40 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		}
 	}
 
+	reopenedFreeSlotResponse := request(http.MethodPost, fmt.Sprintf("/api/v1/arenas/%d/time-slots", arenas[0].ID), map[string]time.Time{
+		"starts_at": freeSlot.StartsAt, "ends_at": freeSlot.EndsAt,
+	}, ownerSession)
+	var reopenedFreeSlot game.TimeSlot
+	if reopenedFreeSlotResponse.Code != http.StatusCreated {
+		t.Fatalf("reopen previously closed time slot status = %d, want %d; body: %s", reopenedFreeSlotResponse.Code, http.StatusCreated, reopenedFreeSlotResponse.Body.String())
+	}
+	if err := json.Unmarshal(reopenedFreeSlotResponse.Body.Bytes(), &reopenedFreeSlot); err != nil {
+		t.Fatalf("decode reopened time slot: %v", err)
+	}
+	if reopenedFreeSlot.ID != freeSlot.ID || reopenedFreeSlot.ClosedAt != nil {
+		t.Errorf("reopened time slot = %+v, want original slot %d with no closed_at", reopenedFreeSlot, freeSlot.ID)
+	}
+
+	overlappingOpenSlot := request(http.MethodPost, fmt.Sprintf("/api/v1/arenas/%d/time-slots", arenas[0].ID), map[string]time.Time{
+		"starts_at": freeSlot.StartsAt.Add(30 * time.Minute),
+		"ends_at":   freeSlot.EndsAt.Add(30 * time.Minute),
+	}, ownerSession)
+	if overlappingOpenSlot.Code != http.StatusConflict {
+		t.Errorf("create overlapping open time slot status = %d, want %d", overlappingOpenSlot.Code, http.StatusConflict)
+	}
+
+	closedAgainAfterReopen := request(http.MethodPatch, closeFreeSlotPath, nil, ownerSession)
+	if closedAgainAfterReopen.Code != http.StatusOK {
+		t.Fatalf("close reopened time slot status = %d, want %d", closedAgainAfterReopen.Code, http.StatusOK)
+	}
+	overlappingClosedSlot := request(http.MethodPost, fmt.Sprintf("/api/v1/arenas/%d/time-slots", arenas[0].ID), map[string]time.Time{
+		"starts_at": freeSlot.StartsAt.Add(30 * time.Minute),
+		"ends_at":   freeSlot.EndsAt.Add(30 * time.Minute),
+	}, ownerSession)
+	if overlappingClosedSlot.Code != http.StatusCreated {
+		t.Errorf("create slot overlapping only a closed interval status = %d, want %d; body: %s", overlappingClosedSlot.Code, http.StatusCreated, overlappingClosedSlot.Body.String())
+	}
+
 	missingLeaveResponse := request(http.MethodDelete, "/api/v1/games/9223372036854775807/participants/me", nil, playerSession)
 	if missingLeaveResponse.Code != http.StatusNotFound {
 		t.Errorf("leave missing game status = %d, want %d", missingLeaveResponse.Code, http.StatusNotFound)

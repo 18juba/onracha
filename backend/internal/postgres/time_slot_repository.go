@@ -20,7 +20,7 @@ func NewTimeSlotRepository(db *sql.DB) *TimeSlotRepository {
 	return &TimeSlotRepository{db: db}
 }
 
-// Create adds an interval when the user owns the arena and it does not overlap another slot.
+// Create adds an interval or reopens the exact closed interval when it has no open overlap.
 func (r *TimeSlotRepository) Create(ctx context.Context, ownerUserID int64, value game.TimeSlot) (game.TimeSlot, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -43,12 +43,25 @@ func (r *TimeSlotRepository) Create(ctx context.Context, ownerUserID int64, valu
 	if err := tx.QueryRowContext(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM arena_time_slots
-			WHERE arena_id = $1 AND starts_at < $3 AND ends_at > $2
+			WHERE arena_id = $1 AND closed_at IS NULL AND starts_at < $3 AND ends_at > $2
 		)`, value.ArenaID, value.StartsAt, value.EndsAt).Scan(&overlaps); err != nil {
 		return game.TimeSlot{}, fmt.Errorf("check overlapping arena time slots: %w", err)
 	}
 	if overlaps {
 		return game.TimeSlot{}, game.ErrTimeSlotConflict
+	}
+	if err := tx.QueryRowContext(ctx, `
+		UPDATE arena_time_slots
+		SET closed_at = NULL
+		WHERE arena_id = $1 AND starts_at = $2 AND ends_at = $3 AND closed_at IS NOT NULL
+		RETURNING id, created_at`, value.ArenaID, value.StartsAt, value.EndsAt,
+	).Scan(&value.ID, &value.CreatedAt); err == nil {
+		if err := tx.Commit(); err != nil {
+			return game.TimeSlot{}, fmt.Errorf("commit time slot reopening: %w", err)
+		}
+		return value, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return game.TimeSlot{}, fmt.Errorf("reopen closed arena time slot: %w", err)
 	}
 
 	if err := tx.QueryRowContext(ctx, `
