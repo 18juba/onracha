@@ -36,6 +36,19 @@ export type UpdateArenaInput = Omit<CreateArenaInput, 'latitude' | 'longitude'> 
 	active: boolean;
 };
 
+export type TimeSlot = {
+	id: number;
+	arena_id: number;
+	starts_at: string;
+	ends_at: string;
+	created_at: string;
+};
+
+export type CreateTimeSlotInput = {
+	starts_at: string;
+	ends_at: string;
+};
+
 export class ApiError extends Error {
 	constructor(
 		message: string,
@@ -125,6 +138,21 @@ export const api = {
 	updateArena(arenaID: number, input: UpdateArenaInput): Promise<Arena> {
 		return request(`/api/v1/arenas/${arenaID}`, {
 			method: 'PUT',
+			body: JSON.stringify(input)
+		});
+	},
+
+	toggleArenaActive(arenaID: number): Promise<Arena> {
+		return request(`/api/v1/arenas/${arenaID}/active`, { method: 'PATCH' });
+	},
+
+	listArenaTimeSlots(arenaID: number): Promise<TimeSlot[]> {
+		return request(`/api/v1/arenas/${arenaID}/time-slots`);
+	},
+
+	createArenaTimeSlot(arenaID: number, input: CreateTimeSlotInput): Promise<TimeSlot> {
+		return request(`/api/v1/arenas/${arenaID}/time-slots`, {
+			method: 'POST',
 			body: JSON.stringify(input)
 		});
 	},

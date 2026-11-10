@@ -9,17 +9,18 @@
 		ImagePlus,
 		LoaderCircle,
 		MapPin,
-		Pencil,
 		Plus,
 		X
 	} from '@lucide/svelte';
 	import { api, type Arena } from '../api';
 	import { getUserFacingErrorMessage } from '../errors';
 	import type { Theme } from '../theme';
+	import ArenaSchedule from './ArenaSchedule.svelte';
 	import MapView from './MapView.svelte';
 
 	type Coordinates = { latitude: number; longitude: number };
-	type Screen = 'list' | 'details' | 'location';
+	type Screen = 'list' | 'details' | 'location' | 'photo' | 'schedule';
+	type EditReturnScreen = 'list' | 'schedule';
 
 	type Props = { theme: Theme };
 
@@ -69,6 +70,9 @@
 	let loadError = $state('');
 	let formError = $state('');
 	let successMessage = $state('');
+	let selectedArena = $state<Arena | null>(null);
+	let editReturnScreen = $state<EditReturnScreen>('list');
+	let showLocationInstructions = $state(true);
 	let editingArena = $state<Arena | null>(null);
 	let arenaActive = $state(true);
 	let name = $state('');
@@ -107,13 +111,21 @@
 
 	function startCreation() {
 		resetForm();
+		selectedArena = null;
+		editReturnScreen = 'list';
 		formError = '';
 		successMessage = '';
 		screen = 'details';
 	}
 
-	function startEditing(arena: Arena) {
+	function startEditing(
+		arena: Arena | null = selectedArena,
+		returnTo: EditReturnScreen = 'schedule'
+	) {
+		if (!arena) return;
+
 		resetForm();
+		editReturnScreen = returnTo;
 		editingArena = arena;
 		arenaActive = arena.active;
 		name = arena.name;
@@ -131,11 +143,32 @@
 		screen = 'details';
 	}
 
+	function openSchedule(arena: Arena) {
+		selectedArena = arena;
+		screen = 'schedule';
+	}
+
+	function updateSelectedArena(arena: Arena) {
+		upsertArena(arena);
+		selectedArena = arena;
+	}
+
+	function closeSchedule() {
+		selectedArena = null;
+		screen = 'list';
+	}
+
 	function showLocationPicker(event: SubmitEvent) {
 		event.preventDefault();
 		formError = '';
 		photoError = '';
+		showLocationInstructions = true;
 		screen = 'location';
+	}
+
+	function showPhotoStep() {
+		formError = '';
+		screen = 'photo';
 	}
 
 	function selectPhoto(event: Event) {
@@ -172,6 +205,7 @@
 
 	function selectLocation(location: Coordinates) {
 		selectedLocation = location;
+		showLocationInstructions = false;
 		formError = '';
 	}
 
@@ -211,13 +245,14 @@
 					return;
 				}
 
-				arenas = arenas.map((arena) => (arena.id === arenaWithPhoto.id ? arenaWithPhoto : arena));
+				upsertArena(arenaWithPhoto);
+				if (arenaBeingEdited) selectedArena = arenaWithPhoto;
 				pendingPhotoArena = null;
 				successMessage = arenaBeingEdited
 					? 'Alterações salvas com foto.'
 					: 'Arena cadastrada com foto.';
 				resetForm();
-				screen = 'list';
+				screen = arenaBeingEdited ? 'schedule' : 'list';
 				return;
 			}
 
@@ -251,6 +286,7 @@
 					savedArena = await api.replaceArenaPhoto(savedArena.id, selectedPhoto);
 				} catch (error) {
 					upsertArena(savedArena);
+					if (arenaBeingEdited) selectedArena = savedArena;
 					pendingPhotoArena = savedArena;
 					formError = `Os dados foram salvos, mas a foto não foi enviada. ${getUserFacingErrorMessage(error, 'Tente novamente.')}`;
 					return;
@@ -258,6 +294,7 @@
 			}
 
 			upsertArena(savedArena);
+			if (arenaBeingEdited) selectedArena = savedArena;
 			successMessage = arenaBeingEdited
 				? selectedPhoto
 					? 'Alterações salvas com foto.'
@@ -266,7 +303,7 @@
 					? 'Arena cadastrada com foto.'
 					: 'Arena cadastrada.';
 			resetForm();
-			screen = 'list';
+			screen = arenaBeingEdited ? 'schedule' : 'list';
 		} catch (error) {
 			formError = getUserFacingErrorMessage(
 				error,
@@ -293,22 +330,24 @@
 	function finishWithoutPhoto() {
 		if (!pendingPhotoArena) return;
 
+		const editedExistingArena = editingArena !== null;
+		if (editedExistingArena) selectedArena = pendingPhotoArena;
 		pendingPhotoArena = null;
-		successMessage = editingArena
+		successMessage = editedExistingArena
 			? 'Alterações salvas. A foto anterior foi mantida.'
 			: 'Arena cadastrada sem foto.';
 		resetForm();
-		screen = 'list';
+		screen = editedExistingArena ? 'schedule' : 'list';
 	}
 
-	function backToArenaList() {
+	function cancelArenaForm() {
 		if (pendingPhotoArena) {
 			finishWithoutPhoto();
 			return;
 		}
 
 		resetForm();
-		screen = 'list';
+		screen = editReturnScreen;
 	}
 </script>
 
@@ -418,7 +457,7 @@
 				</button>
 			</div>
 		{:else if arenas.length > 0}
-			<div class="grid grid-cols-2 gap-3 px-4 pb-6">
+			<div class="grid grid-cols-1 gap-3 px-4 pb-6">
 				{#each arenas as arena (arena.id)}
 					<article
 						class="overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)]"
@@ -426,10 +465,10 @@
 						<button
 							class="block w-full text-left transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none focus-visible:ring-inset"
 							type="button"
-							aria-label={`Editar arena ${arena.name}`}
-							onclick={() => startEditing(arena)}
+							aria-label={`Abrir horários da arena ${arena.name}`}
+							onclick={() => openSchedule(arena)}
 						>
-							<div class="relative aspect-[1.25] overflow-hidden bg-[var(--surface-raised)]">
+							<div class="relative aspect-[16/9] overflow-hidden bg-[var(--surface-raised)]">
 								<div class="absolute inset-0 grid place-items-center text-[var(--accent)]">
 									<Building2 size={34} strokeWidth={1.5} aria-hidden="true" />
 								</div>
@@ -448,14 +487,7 @@
 								</span>
 							</div>
 							<div class="p-3">
-								<div class="flex items-center gap-2">
-									<h2 class="min-w-0 flex-1 truncate text-sm font-semibold">{arena.name}</h2>
-									<Pencil
-										size={14}
-										class="shrink-0 text-[var(--text-secondary)]"
-										aria-hidden="true"
-									/>
-								</div>
+								<h2 class="truncate text-base font-semibold">{arena.name}</h2>
 								<p class="mt-1 truncate text-xs text-[var(--text-secondary)]">
 									{arena.city}, {arena.state}
 								</p>
@@ -474,26 +506,22 @@
 			<button
 				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
 				type="button"
-				aria-label={pendingPhotoArena
-					? 'Concluir sem foto e voltar para arenas'
-					: editingArena
-						? 'Cancelar edição'
-						: 'Voltar para arenas'}
-				onclick={backToArenaList}
+				aria-label={editingArena ? 'Cancelar edição' : 'Voltar para arenas'}
+				onclick={cancelArenaForm}
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
 			</button>
 			<div>
 				<h1 class="text-lg font-semibold">{editingArena ? 'Editar arena' : 'Nova arena'}</h1>
 				<p class="text-xs text-[var(--text-secondary)]">
-					{editingArena ? 'Dados da arena' : '1 de 2 · Dados do espaço'}
+					{editingArena ? 'Dados da arena' : '1 de 3 · Dados do espaço'}
 				</p>
 			</div>
 		</header>
 
 		<form class="flex flex-1 flex-col px-5 py-5" onsubmit={showLocationPicker}>
 			<div class="mb-6 h-1 overflow-hidden rounded-full bg-[var(--surface-raised)]">
-				<div class="h-full w-1/2 rounded-full bg-[var(--accent)]"></div>
+				<div class="h-full w-1/3 rounded-full bg-[var(--accent)]"></div>
 			</div>
 
 			<div class="grid gap-4">
@@ -522,80 +550,6 @@
 						{/each}
 					</select>
 				</label>
-
-				<div class="grid gap-2 text-sm font-medium">
-					<span
-						>Foto da arena <span class="font-normal text-[var(--text-secondary)]">(opcional)</span
-						></span
-					>
-					<div
-						class="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
-					>
-						<div
-							class="grid size-20 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--surface-raised)] text-[var(--accent)]"
-						>
-							{#if photoPreview || currentArenaPhotoURL}
-								<img
-									src={photoPreview || currentArenaPhotoURL || ''}
-									alt={photoPreview ? 'Pré-visualização da foto da arena' : `Foto atual de ${name}`}
-									class="size-full object-cover"
-								/>
-							{:else}
-								<ImagePlus size={28} strokeWidth={1.7} aria-hidden="true" />
-							{/if}
-						</div>
-						<div class="flex min-w-0 flex-col items-start gap-1">
-							<label
-								class="inline-flex min-h-10 cursor-pointer items-center rounded-xl px-3 text-sm font-semibold text-[var(--accent)] transition-colors focus-within:ring-4 focus-within:ring-[var(--focus-ring)] hover:bg-[var(--focus-ring)]"
-							>
-								{#key photoInputKey}
-									<input
-										class="sr-only"
-										type="file"
-										name="photo"
-										accept="image/jpeg,image/png"
-										onchange={selectPhoto}
-									/>
-								{/key}
-								<span
-									>{selectedPhoto || currentArenaPhotoURL ? 'Trocar foto' : 'Adicionar foto'}</span
-								>
-							</label>
-							{#if selectedPhoto}
-								<button
-									class="inline-flex min-h-9 items-center gap-1 rounded-xl px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
-									type="button"
-									onclick={clearPhoto}
-								>
-									<X size={14} aria-hidden="true" />
-									Remover foto
-								</button>
-							{/if}
-						</div>
-					</div>
-					<p class="text-xs font-normal text-[var(--text-secondary)]">JPEG ou PNG · até 5 MB</p>
-					{#if photoError}
-						<p class="text-xs font-normal text-[var(--text-primary)]" role="alert">{photoError}</p>
-					{/if}
-				</div>
-
-				{#if editingArena}
-					<label
-						class="flex min-h-14 items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
-					>
-						<input
-							class="size-5 shrink-0 accent-[var(--accent)]"
-							type="checkbox"
-							bind:checked={arenaActive}
-						/>
-						<span class="grid gap-0.5">
-							<span class="text-sm font-medium">Arena em atividade</span>
-							<span class="text-xs font-normal text-[var(--text-secondary)]">
-								Aparece como disponível na busca
-							</span>
-						</span>
-					</label>
-				{/if}
 
 				<label class="grid gap-2 text-sm font-medium">
 					<span>Endereço</span>
@@ -661,7 +615,7 @@
 			</div>
 		</form>
 	</section>
-{:else}
+{:else if screen === 'location'}
 	<section class="relative z-10 flex min-h-0 flex-1 flex-col bg-[var(--app-background)]">
 		<header class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
 			<button
@@ -675,13 +629,7 @@
 			<div class="min-w-0 flex-1">
 				<h1 class="text-lg font-semibold">Local da arena</h1>
 				<p class="text-xs text-[var(--text-secondary)]">
-					{#if editingArena}
-						{selectedLocation
-							? 'Toque no mapa para ajustar o local'
-							: 'Local opcional · toque no mapa para marcar'}
-					{:else}
-						2 de 2 · Toque no mapa para marcar
-					{/if}
+					{editingArena ? '2 de 3 · Toque para ajustar' : '2 de 3 · Toque para marcar'}
 				</p>
 			</div>
 			<span
@@ -691,8 +639,41 @@
 			</span>
 		</header>
 
-		<div class="flex min-h-0 flex-1">
+		<div class="relative flex min-h-0 flex-1">
 			<MapView {theme} selectable={true} {selectedLocation} onSelectLocation={selectLocation} />
+			{#if showLocationInstructions}
+				<div class="absolute inset-x-4 top-4 z-[600] flex justify-center">
+					<div
+						class="w-full max-w-sm rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xl backdrop-blur-xl"
+						role="dialog"
+						aria-labelledby="arena-map-instructions-title"
+					>
+						<div class="flex items-start gap-3">
+							<span
+								class="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--focus-ring)] text-[var(--accent)]"
+							>
+								<MapPin size={20} aria-hidden="true" />
+							</span>
+							<div class="min-w-0 flex-1">
+								<h2 id="arena-map-instructions-title" class="font-semibold">
+									Selecione o local da arena
+								</h2>
+								<p class="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
+									Toque no mapa no ponto onde a arena fica.
+								</p>
+							</div>
+							<button
+								class="grid size-9 shrink-0 place-items-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+								type="button"
+								aria-label="Entendi"
+								onclick={() => (showLocationInstructions = false)}
+							>
+								<X size={18} aria-hidden="true" />
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<footer
@@ -710,18 +691,118 @@
 					aria-live="polite"
 				>
 					<MapPin size={15} class="shrink-0 text-[var(--accent)]" aria-hidden="true" />
-					<span class="truncate">
-						{selectedLocation.latitude.toFixed(5)}, {selectedLocation.longitude.toFixed(5)}
-					</span>
+					<span class="truncate"
+						>{selectedLocation.latitude.toFixed(5)}, {selectedLocation.longitude.toFixed(5)}</span
+					>
 				</p>
 			{:else if editingArena}
-				<p class="mb-3 text-xs text-[var(--text-secondary)]">Nenhum local informado</p>
+				<p class="mb-3 text-xs text-[var(--text-secondary)]">Nenhum local informado · opcional</p>
 			{/if}
 			<button
 				class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
 				type="button"
-				disabled={isSaving ||
-					(pendingPhotoArena ? !selectedPhoto : !editingArena && !selectedLocation)}
+				disabled={!editingArena && !selectedLocation}
+				onclick={showPhotoStep}
+			>
+				<span>Continuar para a foto</span>
+				<ArrowRight size={19} aria-hidden="true" />
+			</button>
+		</footer>
+	</section>
+{:else if screen === 'photo'}
+	<section class="relative z-10 flex min-h-0 flex-1 flex-col bg-[var(--app-background)]">
+		<header class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
+			<button
+				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-40"
+				type="button"
+				aria-label="Voltar para o mapa"
+				disabled={pendingPhotoArena !== null}
+				onclick={() => (screen = 'location')}
+			>
+				<ArrowLeft size={21} aria-hidden="true" />
+			</button>
+			<div class="min-w-0 flex-1">
+				<h1 class="text-lg font-semibold">Foto da arena</h1>
+				<p class="text-xs text-[var(--text-secondary)]">3 de 3 · Opcional</p>
+			</div>
+			<span
+				class="grid size-9 place-items-center rounded-xl bg-[var(--surface)] text-[var(--accent)]"
+			>
+				<ImagePlus size={19} aria-hidden="true" />
+			</span>
+		</header>
+
+		<div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+			<div class="mx-auto grid w-full max-w-sm gap-4">
+				<div>
+					<h2 class="text-xl font-semibold tracking-tight">Mostre sua arena</h2>
+					<p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+						Adicione uma foto para os jogadores reconhecerem o espaço.
+					</p>
+				</div>
+
+				<div
+					class="relative grid aspect-[4/3] place-items-center overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--surface)] text-[var(--accent)]"
+				>
+					{#if photoPreview || currentArenaPhotoURL}
+						<img
+							src={photoPreview || currentArenaPhotoURL || ''}
+							alt={photoPreview ? 'Pré-visualização da foto da arena' : `Foto atual de ${name}`}
+							class="absolute inset-0 size-full object-cover"
+						/>
+					{:else}
+						<div class="grid size-20 place-items-center rounded-[26px] bg-[var(--app-background)]">
+							<ImagePlus size={36} strokeWidth={1.5} aria-hidden="true" />
+						</div>
+					{/if}
+				</div>
+
+				<div class="flex flex-wrap items-center gap-2">
+					<label
+						class="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--accent)] transition-colors focus-within:ring-4 focus-within:ring-[var(--focus-ring)] hover:bg-[var(--surface-raised)]"
+					>
+						{#key photoInputKey}
+							<input
+								class="sr-only"
+								type="file"
+								name="photo"
+								accept="image/jpeg,image/png"
+								onchange={selectPhoto}
+							/>
+						{/key}
+						<span>{selectedPhoto || currentArenaPhotoURL ? 'Trocar foto' : 'Escolher foto'}</span>
+					</label>
+					{#if selectedPhoto}
+						<button
+							class="inline-flex min-h-11 items-center gap-2 rounded-2xl px-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+							type="button"
+							onclick={clearPhoto}
+						>
+							<X size={15} aria-hidden="true" />
+							Remover foto
+						</button>
+					{/if}
+				</div>
+				<p class="text-xs text-[var(--text-secondary)]">JPEG ou PNG · até 5 MB</p>
+				{#if photoError}
+					<p class="text-sm text-[var(--text-primary)]" role="alert">{photoError}</p>
+				{/if}
+			</div>
+		</div>
+
+		<footer
+			class="border-t border-[var(--border)] bg-[var(--app-background)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+		>
+			{#if formError}
+				<p class="mb-3 flex items-center gap-2 text-sm text-[var(--text-primary)]" role="alert">
+					<AlertCircle size={17} class="shrink-0 text-[var(--accent)]" aria-hidden="true" />
+					{formError}
+				</p>
+			{/if}
+			<button
+				class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+				type="button"
+				disabled={isSaving || (pendingPhotoArena !== null && !selectedPhoto)}
 				onclick={saveArena}
 			>
 				{#if isSaving}
@@ -730,7 +811,13 @@
 						class="animate-spin motion-reduce:animate-none"
 						aria-hidden="true"
 					/>
-					<span>{editingArena ? 'Salvando alterações' : 'Cadastrando arena'}</span>
+					<span
+						>{pendingPhotoArena
+							? 'Enviando foto'
+							: editingArena
+								? 'Salvando alterações'
+								: 'Cadastrando arena'}</span
+					>
 				{:else}
 					<Check size={19} aria-hidden="true" />
 					<span>
@@ -738,7 +825,9 @@
 							? 'Tentar enviar foto'
 							: editingArena
 								? 'Salvar alterações'
-								: 'Cadastrar arena'}
+								: selectedPhoto
+									? 'Cadastrar arena'
+									: 'Cadastrar sem foto'}
 					</span>
 				{/if}
 			</button>
@@ -753,4 +842,11 @@
 			{/if}
 		</footer>
 	</section>
+{:else if screen === 'schedule' && selectedArena}
+	<ArenaSchedule
+		arena={selectedArena}
+		onBack={closeSchedule}
+		onEdit={() => startEditing(selectedArena, 'schedule')}
+		onArenaUpdated={updateSelectedArena}
+	/>
 {/if}

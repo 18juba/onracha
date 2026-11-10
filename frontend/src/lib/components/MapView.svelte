@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LocateFixed, LoaderCircle, MapPin, Minus, Plus } from '@lucide/svelte';
+	import { LocateFixed, LoaderCircle, Minus, Plus } from '@lucide/svelte';
 	import type { Theme } from '../theme';
 
 	type Coordinates = { latitude: number; longitude: number };
@@ -78,7 +78,7 @@
 			if (!map || !leaflet) return;
 
 			const position: [number, number] = [location.latitude, location.longitude];
-			if (!selectable || !currentSelection) map.setView(position, CITY_ZOOM);
+			map.setView(position, CITY_ZOOM);
 
 			if (!accuracyCircle) {
 				accuracyCircle = leaflet
@@ -228,17 +228,6 @@
 >
 	<div class="absolute inset-0" {@attach attachMap}></div>
 
-	{#if selectable}
-		<div
-			class="absolute top-4 left-4 z-[500] flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
-			role="status"
-			aria-live="polite"
-		>
-			<MapPin size={16} class="text-[var(--accent)]" aria-hidden="true" />
-			<span>{selectedLocation ? 'Local marcado' : 'Toque no mapa para marcar'}</span>
-		</div>
-	{/if}
-
 	{#if mapLoadError}
 		<div
 			class="absolute inset-x-4 top-4 z-[500] rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
@@ -246,7 +235,7 @@
 		>
 			Não foi possível carregar o mapa.
 		</div>
-	{:else if locationStatus === 'loading'}
+	{:else if locationStatus === 'loading' && !selectable}
 		<div
 			class="absolute top-4 left-4 z-[500] flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
 			role="status"
@@ -255,7 +244,7 @@
 			<LoaderCircle size={16} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 			<span>Localizando você</span>
 		</div>
-	{:else if locationStatus === 'error'}
+	{:else if locationStatus === 'error' && !selectable}
 		<div
 			class="absolute top-4 left-4 z-[500] max-w-[calc(100%-5.5rem)] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
 			role="alert"
@@ -267,6 +256,29 @@
 				onclick={mapControls.requestUserLocation}
 			>
 				Tentar novamente
+			</button>
+		</div>
+	{:else if selectable && locationStatus === 'loading'}
+		<div
+			class="absolute bottom-4 left-4 z-[500] flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
+			role="status"
+			aria-live="polite"
+		>
+			<LoaderCircle size={14} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+			<span>Centralizando na sua localização</span>
+		</div>
+	{:else if selectable && locationStatus === 'error'}
+		<div
+			class="absolute bottom-4 left-4 z-[500] max-w-[calc(100%-5.5rem)] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
+			role="alert"
+		>
+			<p>{locationMessage}</p>
+			<button
+				class="mt-1 min-h-9 font-semibold text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+				type="button"
+				onclick={mapControls.requestUserLocation}
+			>
+				Tentar localizar
 			</button>
 		</div>
 	{/if}
