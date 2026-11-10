@@ -16,7 +16,9 @@
 	}
 </script>
 
-<div class="grid h-svh w-full place-items-center bg-[var(--page-outside)] px-0 py-0 sm:px-6 sm:py-6">
+<div
+	class="grid h-svh w-full place-items-center bg-[var(--page-outside)] px-0 py-0 sm:px-6 sm:py-6"
+>
 	<div
 		class="flex h-svh w-full max-w-[430px] flex-col overflow-hidden bg-[var(--app-background)] pt-[env(safe-area-inset-top)] text-[var(--text-primary)] shadow-[0_32px_100px_rgba(0,0,0,0.24)] transition-colors duration-300 motion-reduce:transition-none sm:h-[min(860px,calc(100svh-48px))] sm:rounded-[32px] sm:border sm:border-[var(--border)]"
 	>
@@ -36,7 +38,12 @@
 				</div>
 			{:else if activeTab === 'jogos'}
 				<section class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
-					<CalendarDays size={34} strokeWidth={1.7} class="text-[var(--accent)]" aria-hidden="true" />
+					<CalendarDays
+						size={34}
+						strokeWidth={1.7}
+						class="text-[var(--accent)]"
+						aria-hidden="true"
+					/>
 					<h1 class="text-2xl font-semibold tracking-tight">Jogos</h1>
 				</section>
 			{:else if activeTab === 'arenas'}
@@ -55,6 +62,6 @@
 			{/if}
 		</main>
 
-		<BottomNavigation activeTab={activeTab} onSelect={selectTab} />
+		<BottomNavigation {activeTab} onSelect={selectTab} />
 	</div>
 </div>
