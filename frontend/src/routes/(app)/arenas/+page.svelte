@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — Arenas</title>
+	<title>ONRACHA - Arenas</title>
 </svelte:head>
 
 <ArenaManagement theme={appState.theme} />

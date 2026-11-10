@@ -24,7 +24,7 @@
 >
 	{#each navigationItems as item (item.id)}
 		<a
-			class={`flex min-h-[56px] min-w-0 items-center justify-center border-t-2 border-transparent text-[11px] font-medium transition-[color,opacity,border-color] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === item.id ? 'border-t-[var(--accent)] text-[var(--accent)] opacity-100' : 'text-[var(--text-secondary)] opacity-45 hover:text-[var(--text-primary)] hover:opacity-80'}`}
+			class={`flex min-h-[56px] min-w-0 items-center justify-center text-[11px] font-medium transition-[color,opacity] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none motion-reduce:transition-none ${activeTab === item.id ? 'text-[var(--accent)] opacity-100' : 'text-[var(--text-muted)] opacity-80 hover:text-[var(--text-secondary)]'}`}
 			href={resolve(item.href)}
 			aria-current={activeTab === item.id ? 'page' : undefined}
 		>

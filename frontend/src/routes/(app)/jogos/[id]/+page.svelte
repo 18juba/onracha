@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '../../../../lib/components/ui/Button.svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
@@ -102,31 +103,35 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — Sala do jogo</title>
+	<title>ONRACHA - Sala do jogo</title>
 </svelte:head>
 
 <section class="relative z-10 flex min-h-0 flex-1 flex-col bg-[var(--app-background)]">
 	<header
 		class="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3"
 	>
-		<button
-			class="grid size-10 place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+		<Button
 			type="button"
 			aria-label="Voltar"
 			onclick={goBack}
+			variant="secondary"
+			size="icon"
+			class=""
 		>
 			<ArrowLeft size={19} aria-hidden="true" />
-		</button>
+		</Button>
 		<h1 class="text-base font-semibold">Sala do jogo</h1>
-		<button
-			class="grid size-10 place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-50"
+		<Button
 			type="button"
 			aria-label="Atualizar sala"
 			disabled={isLoading || isJoining}
 			onclick={refreshLobby}
+			variant="secondary"
+			size="icon"
+			class=""
 		>
 			<RefreshCw size={17} class={isLoading ? 'animate-spin' : ''} aria-hidden="true" />
-		</button>
+		</Button>
 	</header>
 
 	{#if isLoading}
@@ -142,14 +147,10 @@
 			<p class="max-w-xs rounded-2xl bg-[var(--surface)] px-4 py-3 text-sm" role="alert">
 				{loadError || 'Este jogo não foi encontrado.'}
 			</p>
-			<button
-				class="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 font-semibold text-slate-950 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
-				type="button"
-				onclick={refreshLobby}
-			>
+			<Button type="button" onclick={refreshLobby} variant="primary" size="default" class="gap-2">
 				<RefreshCw size={16} aria-hidden="true" />
 				Tentar novamente
-			</button>
+			</Button>
 		</div>
 	{:else}
 		<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -268,11 +269,13 @@
 					{currentUserIsOrganizer ? 'Você organiza este jogo' : 'Você está confirmado'}
 				</div>
 			{:else}
-				<button
-					class="mt-5 flex min-h-12 w-full items-center justify-between rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-slate-950 transition-transform focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.99] disabled:cursor-wait disabled:opacity-65"
+				<Button
 					type="button"
 					disabled={isJoining}
 					onclick={joinGame}
+					variant="primary"
+					size="lg"
+					class="mt-5 w-full justify-between"
 				>
 					<span>{isJoining ? 'Confirmando presença…' : 'Entrar neste jogo'}</span>
 					{#if isJoining}
@@ -284,7 +287,7 @@
 					{:else}
 						<Check size={19} aria-hidden="true" />
 					{/if}
-				</button>
+				</Button>
 			{/if}
 		</div>
 	{/if}

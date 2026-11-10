@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Button from '../lib/components/ui/Button.svelte';
+	import Input from '../lib/components/ui/Input.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { onMount, tick } from 'svelte';
@@ -144,7 +146,7 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — entrar ou criar conta</title>
+	<title>ONRACHA - entrar ou criar conta</title>
 	<meta name="description" content="Entre no ONRACHA para jogar junto." />
 </svelte:head>
 
@@ -157,14 +159,16 @@
 		<header class="relative z-10 grid h-11 grid-cols-[44px_1fr_44px] items-center">
 			<div class="grid size-11 place-items-center">
 				{#if screen !== 'welcome'}
-					<button
-						class="grid size-11 place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+					<Button
 						aria-label="Voltar"
 						type="button"
 						onclick={goBack}
+						variant="secondary"
+						size="icon"
+						class=""
 					>
 						<ArrowLeft size={20} aria-hidden="true" />
-					</button>
+					</Button>
 				{/if}
 			</div>
 
@@ -174,19 +178,21 @@
 				alt="ONRACHA"
 			/>
 
-			<button
-				class="grid size-11 place-items-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition-colors hover:text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
 				aria-pressed={theme === 'light'}
 				type="button"
 				onclick={handleThemeToggle}
+				variant="outline"
+				size="icon"
+				class=""
 			>
 				{#if theme === 'dark'}
 					<Sun size={19} aria-hidden="true" />
 				{:else}
 					<Moon size={19} aria-hidden="true" />
 				{/if}
-			</button>
+			</Button>
 		</header>
 
 		{#if screen === 'email' || screen === 'password'}
@@ -278,22 +284,26 @@
 						</div>
 
 						<div class="grid w-full gap-3">
-							<button
-								class="flex h-[60px] w-full items-center justify-between rounded-2xl bg-[var(--accent)] px-5 text-left text-[15px] font-semibold text-[var(--accent-ink)] transition-[background-color,transform] duration-150 hover:bg-[var(--accent-hover)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.99]"
+							<Button
 								type="button"
 								onclick={() => startFlow(true)}
+								variant="primary"
+								size="lg"
+								class="w-full justify-between text-left duration-150"
 							>
 								<span>Já tenho conta</span>
 								<ArrowRight size={20} aria-hidden="true" />
-							</button>
-							<button
-								class="flex h-[60px] w-full items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-5 text-left text-[15px] font-semibold transition-[background-color,transform] duration-150 hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.99]"
+							</Button>
+							<Button
 								type="button"
 								onclick={() => startFlow(false)}
+								variant="outline"
+								size="lg"
+								class="w-full justify-between text-left duration-150"
 							>
 								<span>Criar conta</span>
 								<UserRound size={19} class="text-[var(--text-secondary)]" aria-hidden="true" />
-							</button>
+							</Button>
 						</div>
 					{:else if screen === 'email'}
 						<div class="mb-8">
@@ -317,9 +327,10 @@
 							>
 								<label class="sr-only" for="login-email">Email</label>
 								<Mail size={19} class="shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-								<input
+								<Input
+									bare
 									id="login-email"
-									class="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+									class="min-w-0 flex-1"
 									type="email"
 									name="email"
 									bind:value={email}
@@ -350,13 +361,15 @@
 								</p>
 							{/if}
 
-							<button
-								class="mt-2 flex h-[58px] w-full items-center justify-between rounded-2xl bg-[var(--accent)] px-5 text-[15px] font-semibold text-[var(--accent-ink)] transition-[background-color,transform] duration-150 hover:bg-[var(--accent-hover)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.99]"
+							<Button
 								type="submit"
+								variant="primary"
+								size="lg"
+								class="mt-2 w-full justify-between duration-150"
 							>
 								<span>Continuar</span>
 								<ArrowRight size={20} aria-hidden="true" />
-							</button>
+							</Button>
 						</form>
 					{:else if screen === 'password'}
 						<div class="mb-8">
@@ -390,9 +403,10 @@
 									class="shrink-0 text-[var(--text-muted)]"
 									aria-hidden="true"
 								/>
-								<input
+								<Input
+									bare
 									id="login-password"
-									class="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+									class="min-w-0 flex-1"
 									type={showPassword ? 'text' : 'password'}
 									name="password"
 									bind:value={password}
@@ -402,19 +416,21 @@
 									maxlength={128}
 									required
 								/>
-								<button
-									class="grid size-9 shrink-0 place-items-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+								<Button
 									aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
 									aria-pressed={showPassword}
 									type="button"
 									onclick={() => (showPassword = !showPassword)}
+									variant="ghost"
+									size="icon"
+									class="shrink-0"
 								>
 									{#if showPassword}
 										<EyeOff size={18} aria-hidden="true" />
 									{:else}
 										<Eye size={18} aria-hidden="true" />
 									{/if}
-								</button>
+								</Button>
 							</div>
 
 							{#if errorMessage}
@@ -426,10 +442,12 @@
 								</p>
 							{/if}
 
-							<button
-								class="mt-2 flex h-[58px] w-full items-center justify-between rounded-2xl bg-[var(--accent)] px-5 text-[15px] font-semibold text-[var(--accent-ink)] transition-[background-color,transform] duration-150 hover:bg-[var(--accent-hover)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.99] disabled:cursor-wait disabled:opacity-65"
+							<Button
 								type="submit"
 								disabled={submitting}
+								variant="primary"
+								size="lg"
+								class="mt-2 w-full justify-between duration-150"
 							>
 								<span>{submitting ? 'Entrando...' : 'Entrar'}</span>
 								{#if submitting}
@@ -437,7 +455,7 @@
 								{:else}
 									<ArrowRight size={20} aria-hidden="true" />
 								{/if}
-							</button>
+							</Button>
 						</form>
 					{:else if screen === 'register'}
 						<div class="mb-7">
@@ -461,9 +479,10 @@
 							>
 								<label class="sr-only" for="register-name">Nome</label>
 								<UserRound size={18} class="shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-								<input
+								<Input
+									bare
 									id="register-name"
-									class="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+									class="min-w-0 flex-1"
 									name="name"
 									bind:value={name}
 									placeholder="Seu nome"
@@ -478,9 +497,10 @@
 							>
 								<label class="sr-only" for="register-email">Email</label>
 								<Mail size={18} class="shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-								<input
+								<Input
+									bare
 									id="register-email"
-									class="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+									class="min-w-0 flex-1"
 									type="email"
 									name="email"
 									bind:value={email}
@@ -503,9 +523,10 @@
 									class="shrink-0 text-[var(--text-muted)]"
 									aria-hidden="true"
 								/>
-								<input
+								<Input
+									bare
 									id="register-password"
-									class="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+									class="min-w-0 flex-1"
 									type={showPassword ? 'text' : 'password'}
 									name="password"
 									bind:value={password}
@@ -515,19 +536,21 @@
 									maxlength={128}
 									required
 								/>
-								<button
-									class="grid size-9 shrink-0 place-items-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+								<Button
 									aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
 									aria-pressed={showPassword}
 									type="button"
 									onclick={() => (showPassword = !showPassword)}
+									variant="ghost"
+									size="icon"
+									class="shrink-0"
 								>
 									{#if showPassword}
 										<EyeOff size={18} aria-hidden="true" />
 									{:else}
 										<Eye size={18} aria-hidden="true" />
 									{/if}
-								</button>
+								</Button>
 							</div>
 
 							<div
@@ -539,9 +562,10 @@
 									class="shrink-0 text-[var(--text-muted)]"
 									aria-hidden="true"
 								/>
-								<input
+								<Input
+									bare
 									id="register-password-confirmation"
-									class="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+									class="min-w-0 flex-1"
 									type={showPasswordConfirmation ? 'text' : 'password'}
 									name="password_confirmation"
 									bind:value={passwordConfirmation}
@@ -551,21 +575,23 @@
 									maxlength={128}
 									required
 								/>
-								<button
-									class="grid size-9 shrink-0 place-items-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+								<Button
 									aria-label={showPasswordConfirmation
 										? 'Ocultar confirmação da senha'
 										: 'Mostrar confirmação da senha'}
 									aria-pressed={showPasswordConfirmation}
 									type="button"
 									onclick={() => (showPasswordConfirmation = !showPasswordConfirmation)}
+									variant="ghost"
+									size="icon"
+									class="shrink-0"
 								>
 									{#if showPasswordConfirmation}
 										<EyeOff size={18} aria-hidden="true" />
 									{:else}
 										<Eye size={18} aria-hidden="true" />
 									{/if}
-								</button>
+								</Button>
 							</div>
 
 							{#if errorMessage}
@@ -577,10 +603,12 @@
 								</p>
 							{/if}
 
-							<button
-								class="mt-2 flex h-[58px] w-full items-center justify-between rounded-2xl bg-[var(--accent)] px-5 text-[15px] font-semibold text-[var(--accent-ink)] transition-[background-color,transform] duration-150 hover:bg-[var(--accent-hover)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.99] disabled:cursor-wait disabled:opacity-65"
+							<Button
 								type="submit"
 								disabled={submitting}
+								variant="primary"
+								size="lg"
+								class="mt-2 w-full justify-between duration-150"
 							>
 								<span>{submitting ? 'Criando...' : 'Criar conta'}</span>
 								{#if submitting}
@@ -588,7 +616,7 @@
 								{:else}
 									<ArrowRight size={20} aria-hidden="true" />
 								{/if}
-							</button>
+							</Button>
 						</form>
 					{/if}
 				</section>

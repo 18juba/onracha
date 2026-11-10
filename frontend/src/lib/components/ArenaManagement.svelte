@@ -1,4 +1,9 @@
 <script lang="ts">
+	import Button from './ui/Button.svelte';
+	import FilePicker from './ui/FilePicker.svelte';
+	import FormField from './ui/FormField.svelte';
+	import Input from './ui/Input.svelte';
+	import Select from './ui/Select.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import {
 		AlertCircle,
@@ -160,6 +165,10 @@
 
 	function showLocationPicker(event: SubmitEvent) {
 		event.preventDefault();
+		if (!name.trim() || !address.trim() || !city.trim() || !stateCode || !arenaType) {
+			formError = 'Preencha os campos obrigatórios da arena.';
+			return;
+		}
 		formError = '';
 		photoError = '';
 		showLocationInstructions = true;
@@ -358,14 +367,16 @@
 		<header class="flex items-center justify-between gap-3 px-5 pt-6 pb-4">
 			<h1 class="text-2xl font-semibold tracking-tight">Arenas</h1>
 			{#if arenas.length > 0}
-				<button
-					class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+				<Button
 					type="button"
 					onclick={startCreation}
+					variant="primary"
+					size="default"
+					class="shrink-0 justify-center gap-2"
 				>
 					<Plus size={17} aria-hidden="true" />
 					<span>Nova arena</span>
-				</button>
+				</Button>
 			{/if}
 		</header>
 
@@ -387,13 +398,9 @@
 				<AlertCircle size={19} class="mt-0.5 shrink-0 text-[var(--accent)]" aria-hidden="true" />
 				<div class="min-w-0 flex-1">
 					<p>{loadError}</p>
-					<button
-						class="mt-2 min-h-10 font-semibold text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
-						type="button"
-						onclick={loadArenas}
-					>
+					<Button type="button" onclick={loadArenas} variant="ghost" size="sm" class="mt-2">
 						Tentar novamente
-					</button>
+					</Button>
 				</div>
 			</div>
 		{/if}
@@ -431,7 +438,7 @@
 						<path d="M14 58h27v64H14m152-64h-27v64h27" stroke="currentColor" stroke-width="2" />
 					</svg>
 					<div
-						class="relative grid size-[4.5rem] place-items-center rounded-[24px] bg-[var(--accent)] text-white shadow-[0_12px_32px_rgba(9,176,244,0.3)]"
+						class="relative grid size-[4.5rem] place-items-center rounded-[24px] bg-[var(--accent)] text-[var(--accent-ink)] shadow-lg"
 					>
 						<Building2 size={34} strokeWidth={1.8} aria-hidden="true" />
 					</div>
@@ -447,14 +454,16 @@
 				<p class="mt-2 max-w-xs text-sm leading-6 text-[var(--text-secondary)]">
 					Cadastre seu espaço e comece a organizar os jogos.
 				</p>
-				<button
-					class="mt-7 inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+				<Button
 					type="button"
 					onclick={startCreation}
+					variant="primary"
+					size="lg"
+					class="mt-7 w-full max-w-xs justify-center gap-2"
 				>
 					<Plus size={19} aria-hidden="true" />
 					Cadastrar primeira arena
-				</button>
+				</Button>
 			</div>
 		{:else if arenas.length > 0}
 			<div class="grid grid-cols-1 gap-3 px-4 pb-6">
@@ -462,11 +471,13 @@
 					<article
 						class="overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)]"
 					>
-						<button
-							class="block w-full text-left transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none focus-visible:ring-inset"
+						<Button
 							type="button"
 							aria-label={`Abrir horários da arena ${arena.name}`}
 							onclick={() => openSchedule(arena)}
+							variant="ghost"
+							size="none"
+							class="w-full flex-col items-stretch justify-start text-left"
 						>
 							<div class="relative aspect-[16/9] overflow-hidden bg-[var(--surface-raised)]">
 								<div class="absolute inset-0 grid place-items-center text-[var(--accent)]">
@@ -492,7 +503,7 @@
 									{arena.city}, {arena.state}
 								</p>
 							</div>
-						</button>
+						</Button>
 					</article>
 				{/each}
 			</div>
@@ -503,14 +514,16 @@
 		class="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto bg-[var(--app-background)]"
 	>
 		<header class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
-			<button
-				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				aria-label={editingArena ? 'Cancelar edição' : 'Voltar para arenas'}
 				onclick={cancelArenaForm}
+				variant="secondary"
+				size="icon"
+				class="shrink-0"
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
-			</button>
+			</Button>
 			<div>
 				<h1 class="text-lg font-semibold">{editingArena ? 'Editar arena' : 'Nova arena'}</h1>
 				<p class="text-xs text-[var(--text-secondary)]">
@@ -525,10 +538,9 @@
 			</div>
 
 			<div class="grid gap-4">
-				<label class="grid gap-2 text-sm font-medium">
-					<span>Nome da arena</span>
-					<input
-						class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-base text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+				<FormField label="Nome da arena" for="arena-name" required>
+					<Input
+						id="arena-name"
 						name="name"
 						autocomplete="organization"
 						placeholder="Ex.: Arena Central"
@@ -536,25 +548,22 @@
 						bind:value={name}
 						required
 					/>
-				</label>
+				</FormField>
 
-				<label class="grid gap-2 text-sm font-medium">
-					<span>Tipo de arena</span>
-					<select
-						class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-base text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+				<FormField label="Tipo de arena" for="arena-type" required>
+					<Select
+						id="arena-type"
 						name="arena_type"
+						label="Tipo de arena"
+						options={arenaTypes}
 						bind:value={arenaType}
-					>
-						{#each arenaTypes as type (type.value)}
-							<option value={type.value}>{type.label}</option>
-						{/each}
-					</select>
-				</label>
+						required
+					/>
+				</FormField>
 
-				<label class="grid gap-2 text-sm font-medium">
-					<span>Endereço</span>
-					<input
-						class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-base text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+				<FormField label="Endereço" for="arena-address" required>
+					<Input
+						id="arena-address"
 						name="address"
 						autocomplete="street-address"
 						placeholder="Rua, número e bairro"
@@ -562,13 +571,12 @@
 						bind:value={address}
 						required
 					/>
-				</label>
+				</FormField>
 
 				<div class="grid gap-4">
-					<label class="grid gap-2 text-sm font-medium">
-						<span>Cidade</span>
-						<input
-							class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-base text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+					<FormField label="Cidade" for="arena-city" required>
+						<Input
+							id="arena-city"
 							name="city"
 							autocomplete="address-level2"
 							placeholder="Sua cidade"
@@ -576,22 +584,21 @@
 							bind:value={city}
 							required
 						/>
-					</label>
-					<label class="grid gap-2 text-sm font-medium">
-						<span>UF</span>
-						<select
-							class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-base text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+					</FormField>
+					<FormField label="UF" for="arena-state" required>
+						<Select
+							id="arena-state"
 							name="state"
-							autocomplete="address-level1"
+							label="UF"
+							placeholder="Selecione a UF"
+							options={brazilianStates.map((state) => ({
+								value: state.value,
+								label: `${state.label} (${state.value})`
+							}))}
 							bind:value={stateCode}
 							required
-						>
-							<option value="" disabled>Selecione a UF</option>
-							{#each brazilianStates as state (state.value)}
-								<option value={state.value}>{state.label} ({state.value})</option>
-							{/each}
-						</select>
-					</label>
+						/>
+					</FormField>
 				</div>
 			</div>
 
@@ -605,27 +612,26 @@
 			{/if}
 
 			<div class="mt-auto pt-6">
-				<button
-					class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
-					type="submit"
-				>
+				<Button type="submit" variant="primary" size="lg" class="w-full justify-center gap-2">
 					<span>{editingArena ? 'Continuar para o mapa' : 'Escolher local no mapa'}</span>
 					<ArrowRight size={19} aria-hidden="true" />
-				</button>
+				</Button>
 			</div>
 		</form>
 	</section>
 {:else if screen === 'location'}
 	<section class="relative z-10 flex min-h-0 flex-1 flex-col bg-[var(--app-background)]">
 		<header class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
-			<button
-				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				aria-label="Voltar para os dados da arena"
 				onclick={() => (screen = 'details')}
+				variant="secondary"
+				size="icon"
+				class="shrink-0"
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
-			</button>
+			</Button>
 			<div class="min-w-0 flex-1">
 				<h1 class="text-lg font-semibold">Local da arena</h1>
 				<p class="text-xs text-[var(--text-secondary)]">
@@ -662,14 +668,16 @@
 									Toque no mapa no ponto onde a arena fica.
 								</p>
 							</div>
-							<button
-								class="grid size-9 shrink-0 place-items-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+							<Button
 								type="button"
 								aria-label="Entendi"
 								onclick={() => (showLocationInstructions = false)}
+								variant="ghost"
+								size="icon"
+								class="shrink-0"
 							>
 								<X size={18} aria-hidden="true" />
-							</button>
+							</Button>
 						</div>
 					</div>
 				</div>
@@ -698,29 +706,33 @@
 			{:else if editingArena}
 				<p class="mb-3 text-xs text-[var(--text-secondary)]">Nenhum local informado · opcional</p>
 			{/if}
-			<button
-				class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+			<Button
 				type="button"
 				disabled={!editingArena && !selectedLocation}
 				onclick={showPhotoStep}
+				variant="primary"
+				size="lg"
+				class="w-full justify-center gap-2"
 			>
 				<span>Continuar para a foto</span>
 				<ArrowRight size={19} aria-hidden="true" />
-			</button>
+			</Button>
 		</footer>
 	</section>
 {:else if screen === 'photo'}
 	<section class="relative z-10 flex min-h-0 flex-1 flex-col bg-[var(--app-background)]">
 		<header class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
-			<button
-				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-40"
+			<Button
 				type="button"
 				aria-label="Voltar para o mapa"
 				disabled={pendingPhotoArena !== null}
 				onclick={() => (screen = 'location')}
+				variant="secondary"
+				size="icon"
+				class="shrink-0"
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
-			</button>
+			</Button>
 			<div class="min-w-0 flex-1">
 				<h1 class="text-lg font-semibold">Foto da arena</h1>
 				<p class="text-xs text-[var(--text-secondary)]">3 de 3 · Opcional</p>
@@ -758,29 +770,24 @@
 				</div>
 
 				<div class="flex flex-wrap items-center gap-2">
-					<label
-						class="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--accent)] transition-colors focus-within:ring-4 focus-within:ring-[var(--focus-ring)] hover:bg-[var(--surface-raised)]"
-					>
-						{#key photoInputKey}
-							<input
-								class="sr-only"
-								type="file"
-								name="photo"
-								accept="image/jpeg,image/png"
-								onchange={selectPhoto}
-							/>
-						{/key}
-						<span>{selectedPhoto || currentArenaPhotoURL ? 'Trocar foto' : 'Escolher foto'}</span>
-					</label>
+					<FilePicker
+						inputKey={photoInputKey}
+						name="photo"
+						accept="image/jpeg,image/png"
+						label={selectedPhoto || currentArenaPhotoURL ? 'Trocar foto' : 'Escolher foto'}
+						onchange={selectPhoto}
+					/>
 					{#if selectedPhoto}
-						<button
-							class="inline-flex min-h-11 items-center gap-2 rounded-2xl px-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+						<Button
 							type="button"
 							onclick={clearPhoto}
+							variant="secondary"
+							size="default"
+							class="gap-2"
 						>
 							<X size={15} aria-hidden="true" />
 							Remover foto
-						</button>
+						</Button>
 					{/if}
 				</div>
 				<p class="text-xs text-[var(--text-secondary)]">JPEG ou PNG · até 5 MB</p>
@@ -799,11 +806,13 @@
 					{formError}
 				</p>
 			{/if}
-			<button
-				class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+			<Button
 				type="button"
 				disabled={isSaving || (pendingPhotoArena !== null && !selectedPhoto)}
 				onclick={saveArena}
+				variant="primary"
+				size="lg"
+				class="w-full justify-center gap-2"
 			>
 				{#if isSaving}
 					<LoaderCircle
@@ -830,15 +839,17 @@
 									: 'Cadastrar sem foto'}
 					</span>
 				{/if}
-			</button>
+			</Button>
 			{#if pendingPhotoArena}
-				<button
-					class="mt-2 min-h-11 w-full rounded-2xl px-4 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+				<Button
 					type="button"
 					onclick={finishWithoutPhoto}
+					variant="secondary"
+					size="default"
+					class="mt-2 w-full"
 				>
 					Concluir sem foto
-				</button>
+				</Button>
 			{/if}
 		</footer>
 	</section>

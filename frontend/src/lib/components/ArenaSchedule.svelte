@@ -1,4 +1,9 @@
 <script lang="ts">
+	import Button from './ui/Button.svelte';
+	import DatePicker from './ui/DatePicker.svelte';
+	import FormField from './ui/FormField.svelte';
+	import Switch from './ui/Switch.svelte';
+	import TimePicker from './ui/TimePicker.svelte';
 	import { onMount } from 'svelte';
 	import {
 		AlertCircle,
@@ -111,20 +116,20 @@
 		}
 	}
 
-	async function toggleActive(event: Event) {
-		const checkbox = event.currentTarget as HTMLInputElement;
+	async function toggleActive(_nextActive: boolean): Promise<boolean> {
 		activeError = '';
 		isUpdatingActive = true;
 
 		try {
 			const updatedArena = await api.toggleArenaActive(arena.id);
 			onArenaUpdated(updatedArena);
+			return true;
 		} catch (error) {
-			checkbox.checked = arena.active;
 			activeError = getUserFacingErrorMessage(
 				error,
 				'Não foi possível atualizar o estado da arena.'
 			);
+			return false;
 		} finally {
 			isUpdatingActive = false;
 		}
@@ -181,39 +186,38 @@
 >
 	<header class="shrink-0 border-b border-[var(--border)] bg-[var(--app-background)]">
 		<div class="flex items-center gap-3 px-4 pt-4 pb-3">
-			<button
-				class="grid size-11 shrink-0 place-items-center rounded-2xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				aria-label="Voltar para arenas"
 				onclick={onBack}
+				variant="secondary"
+				size="icon"
+				class="shrink-0"
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
-			</button>
+			</Button>
 			<div class="min-w-0 flex-1">
 				<h1 class="truncate text-lg font-semibold">{arena.name}</h1>
 				<p class="truncate text-xs text-[var(--text-secondary)]">{arena.city}, {arena.state}</p>
 			</div>
 		</div>
 		<div class="flex items-center justify-between gap-3 px-5 pb-3">
-			<label class="inline-flex min-h-11 items-center gap-2 rounded-xl pr-2 text-sm font-medium">
-				<input
-					class="size-5 accent-[var(--accent)]"
-					type="checkbox"
-					checked={arena.active}
-					disabled={isUpdatingActive}
-					aria-label="Ativo"
-					onchange={toggleActive}
-				/>
-				<span>Ativo</span>
-			</label>
-			<button
-				class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Switch
+				checked={arena.active}
+				label="Ativo"
+				disabled={isUpdatingActive}
+				onCheckedChange={toggleActive}
+			/>
+			<Button
 				type="button"
 				onclick={onEdit}
+				variant="outline"
+				size="default"
+				class="justify-center gap-2"
 			>
 				<Pencil size={15} aria-hidden="true" />
 				Editar arena
-			</button>
+			</Button>
 		</div>
 	</header>
 
@@ -233,38 +237,16 @@
 			class="grid gap-3 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4"
 			onsubmit={createSlot}
 		>
-			<label class="grid gap-2 text-sm font-medium">
-				<span>Data</span>
-				<input
-					class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--app-background)] px-4 text-base text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
-					name="date"
-					type="date"
-					min={today}
-					bind:value={slotDate}
-					required
-				/>
-			</label>
+			<FormField label="Data" for="slot-date" required>
+				<DatePicker id="slot-date" name="date" min={today} bind:value={slotDate} required />
+			</FormField>
 			<div class="grid grid-cols-2 gap-3">
-				<label class="grid gap-2 text-sm font-medium">
-					<span>Início</span>
-					<input
-						class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--app-background)] px-4 text-base text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
-						name="starts_at"
-						type="time"
-						bind:value={startTime}
-						required
-					/>
-				</label>
-				<label class="grid gap-2 text-sm font-medium">
-					<span>Término</span>
-					<input
-						class="min-h-12 rounded-2xl border border-[var(--border)] bg-[var(--app-background)] px-4 text-base text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--focus-ring)]"
-						name="ends_at"
-						type="time"
-						bind:value={endTime}
-						required
-					/>
-				</label>
+				<FormField label="Início" for="slot-start-time">
+					<TimePicker id="slot-start-time" name="starts_at" bind:value={startTime} required />
+				</FormField>
+				<FormField label="Término" for="slot-end-time">
+					<TimePicker id="slot-end-time" name="ends_at" bind:value={endTime} required />
+				</FormField>
 			</div>
 			{#if formError}
 				<p class="text-sm text-[var(--text-primary)]" role="alert">{formError}</p>
@@ -275,10 +257,12 @@
 					{successMessage}
 				</p>
 			{/if}
-			<button
-				class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+			<Button
 				type="submit"
 				disabled={isSavingSlot || !slotDate || !startTime || !endTime}
+				variant="primary"
+				size="lg"
+				class="justify-center gap-2"
 			>
 				{#if isSavingSlot}
 					<LoaderCircle
@@ -291,7 +275,7 @@
 					<CalendarPlus size={18} aria-hidden="true" />
 					<span>Liberar horário</span>
 				{/if}
-			</button>
+			</Button>
 		</form>
 
 		<section class="grid gap-3" aria-labelledby="available-slots-title">
@@ -317,13 +301,9 @@
 						/>
 						{loadError}
 					</p>
-					<button
-						class="mt-2 min-h-10 text-sm font-semibold text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
-						type="button"
-						onclick={loadSlots}
-					>
+					<Button type="button" onclick={loadSlots} variant="ghost" size="sm" class="mt-2">
 						Tentar novamente
-					</button>
+					</Button>
 				</div>
 			{:else if isLoading}
 				<div class="grid min-h-24 place-items-center" role="status" aria-live="polite">
@@ -363,12 +343,14 @@
 							{#if slot.closed_at}
 								<Check size={17} class="shrink-0 text-[var(--accent)]" aria-hidden="true" />
 							{:else}
-								<button
-									class="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-[var(--danger)] transition-colors hover:bg-[var(--app-background)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-50"
+								<Button
 									type="button"
 									disabled={closingSlotID !== null}
 									aria-label={`Encerrar horário de ${formatDate(slot.starts_at)} das ${formatTime(slot.starts_at)} às ${formatTime(slot.ends_at)}`}
 									onclick={() => closeTimeSlot(slot)}
+									variant="destructive"
+									size="sm"
+									class="shrink-0 gap-1.5"
 								>
 									{#if closingSlotID === slot.id}
 										<LoaderCircle
@@ -380,7 +362,7 @@
 										<Clock3 size={15} aria-hidden="true" />
 									{/if}
 									<span>Encerrar</span>
-								</button>
+								</Button>
 							{/if}
 						</article>
 					{/each}

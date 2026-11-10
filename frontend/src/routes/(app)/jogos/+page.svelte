@@ -12,7 +12,7 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — Jogos</title>
+	<title>ONRACHA - Jogos</title>
 </svelte:head>
 
 <MyGames

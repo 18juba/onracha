@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from './ui/Button.svelte';
 	import { LocateFixed, LoaderCircle, Minus, Plus, RefreshCw } from '@lucide/svelte';
 	import { api, type DiscoveredArena } from '../api';
 	import {
@@ -338,12 +339,15 @@
 			map.setView(position, CITY_ZOOM);
 
 			if (!accuracyCircle) {
+				const accentColor =
+					getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() ||
+					'#8bcac2';
 				accuracyCircle = leaflet
 					.circle(position, {
 						radius: Math.max(location.accuracy, 30),
-						color: 'rgba(9, 176, 244, 0.6)',
+						color: accentColor,
 						weight: 1,
-						fillColor: '#09b0f4',
+						fillColor: accentColor,
 						fillOpacity: 0.12,
 						interactive: false
 					})
@@ -519,13 +523,15 @@
 			role="alert"
 		>
 			<p>{locationMessage}</p>
-			<button
-				class="mt-2 min-h-11 rounded-xl px-3 font-medium text-[var(--accent)] transition-colors hover:bg-[var(--focus-ring)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				onclick={mapControls.requestUserLocation}
+				variant="ghost"
+				size="default"
+				class="mt-2"
 			>
 				Tentar novamente
-			</button>
+			</Button>
 		</div>
 	{:else if selectable && locationStatus === 'loading'}
 		<div
@@ -542,13 +548,15 @@
 			role="alert"
 		>
 			<p>{locationMessage}</p>
-			<button
-				class="mt-1 min-h-9 font-semibold text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				onclick={mapControls.requestUserLocation}
+				variant="ghost"
+				size="sm"
+				class="mt-1"
 			>
 				Tentar localizar
-			</button>
+			</Button>
 		</div>
 	{/if}
 
@@ -566,14 +574,16 @@
 				<span>Procurando arenas</span>
 			{:else if arenaDiscoveryStatus === 'error'}
 				<span>Busca indisponível</span>
-				<button
-					class="grid size-8 place-items-center rounded-full text-[var(--accent)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+				<Button
 					type="button"
 					aria-label="Tentar buscar arenas novamente"
 					onclick={mapControls.searchArenas}
+					variant="ghost"
+					size="icon"
+					class=""
 				>
 					<RefreshCw size={14} aria-hidden="true" />
-				</button>
+				</Button>
 			{:else if arenaDiscoveryStatus === 'ready'}
 				<span class="size-2 rounded-full bg-[var(--accent)]" aria-hidden="true"></span>
 				<span>
@@ -586,30 +596,36 @@
 	{/if}
 
 	<div class="absolute top-4 right-4 z-[500] grid gap-2">
-		<button
-			class="grid size-11 place-items-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] shadow-lg backdrop-blur-xl transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+		<Button
 			type="button"
 			aria-label="Aumentar o zoom"
 			onclick={mapControls.zoomIn}
+			variant="outline"
+			size="icon"
+			class="shadow-lg backdrop-blur-xl"
 		>
 			<Plus size={19} aria-hidden="true" />
-		</button>
-		<button
-			class="grid size-11 place-items-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] shadow-lg backdrop-blur-xl transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+		</Button>
+		<Button
 			type="button"
 			aria-label="Diminuir o zoom"
 			onclick={mapControls.zoomOut}
+			variant="outline"
+			size="icon"
+			class="shadow-lg backdrop-blur-xl"
 		>
 			<Minus size={19} aria-hidden="true" />
-		</button>
-		<button
-			class="grid size-11 place-items-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--accent)] shadow-lg backdrop-blur-xl transition-colors hover:bg-[var(--focus-ring)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+		</Button>
+		<Button
 			type="button"
 			aria-label="Centralizar na minha localização"
 			onclick={mapControls.centerOnUser}
+			variant="outline"
+			size="icon"
+			class="shadow-lg backdrop-blur-xl"
 		>
 			<LocateFixed size={19} aria-hidden="true" />
-		</button>
+		</Button>
 	</div>
 </div>
 
@@ -663,7 +679,6 @@
 		border: 3px solid var(--app-background);
 		border-radius: 9999px;
 		background: var(--accent);
-		box-shadow: 0 0 0 5px rgb(9 176 244 / 20%);
 	}
 
 	:global(.onracha-selection-marker) {
@@ -761,7 +776,7 @@
 		border-radius: 9999px;
 		background: var(--accent);
 		padding: 0 4px;
-		color: #07121a;
+		color: var(--accent-ink);
 		font-size: 10px;
 		font-weight: 800;
 		line-height: 1;

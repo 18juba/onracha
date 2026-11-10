@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — Buscar</title>
+	<title>ONRACHA - Buscar</title>
 </svelte:head>
 
 <div class="absolute inset-0 flex">

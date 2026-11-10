@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from './ui/Button.svelte';
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import {
@@ -67,14 +68,16 @@
 	>
 		<h1 class="text-2xl font-semibold tracking-tight">Jogos</h1>
 		{#if games.length > 0}
-			<button
-				class="grid size-10 place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				aria-label="Atualizar jogos"
 				onclick={loadGames}
+				variant="secondary"
+				size="icon"
+				class=""
 			>
 				<RefreshCw size={17} aria-hidden="true" />
-			</button>
+			</Button>
 		{/if}
 	</header>
 
@@ -91,14 +94,10 @@
 			<p class="max-w-xs rounded-2xl bg-[var(--surface)] px-4 py-3 text-sm" role="alert">
 				{loadError}
 			</p>
-			<button
-				class="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 font-semibold text-slate-950 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
-				type="button"
-				onclick={loadGames}
-			>
+			<Button type="button" onclick={loadGames} variant="primary" size="default" class="gap-2">
 				<RefreshCw size={16} aria-hidden="true" />
 				Tentar novamente
-			</button>
+			</Button>
 		</div>
 	{:else if games.length === 0}
 		<div class="grid min-h-0 flex-1 content-center justify-items-center px-8 text-center">
@@ -112,14 +111,10 @@
 			<p class="mt-2 max-w-xs text-sm leading-6 text-[var(--text-secondary)]">
 				Encontre uma arena no mapa e entre em um jogo.
 			</p>
-			<button
-				class="mt-6 inline-flex min-h-12 items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 font-semibold text-slate-950 transition-transform focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.98]"
-				type="button"
-				onclick={onFindArenas}
-			>
+			<Button type="button" onclick={onFindArenas} variant="primary" size="lg" class="mt-6 gap-2">
 				<MapPin size={17} aria-hidden="true" />
 				Encontrar arenas
-			</button>
+			</Button>
 		</div>
 	{:else}
 		<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">

@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — Perfil</title>
+	<title>ONRACHA - Perfil</title>
 </svelte:head>
 
 <section

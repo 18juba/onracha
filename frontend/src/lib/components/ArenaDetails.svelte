@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from './ui/Button.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
@@ -99,12 +100,14 @@
 </script>
 
 <div class="absolute inset-0 z-[600] flex items-end">
-	<button
-		class="absolute inset-0 bg-black/35"
+	<Button
 		type="button"
 		aria-label="Fechar detalhes da arena"
 		onclick={onClose}
-	></button>
+		variant="unstyled"
+		size="none"
+		class="absolute inset-0 bg-black/35"
+	></Button>
 
 	<section
 		class="relative flex max-h-[82%] w-full flex-col overflow-hidden rounded-t-[30px] border border-[var(--border)] bg-[var(--app-background)] shadow-2xl"
@@ -120,14 +123,16 @@
 					Arena
 				</span>
 			</div>
-			<button
-				class="grid size-10 place-items-center rounded-full bg-[var(--surface)] text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+			<Button
 				type="button"
 				aria-label="Fechar"
 				onclick={onClose}
+				variant="secondary"
+				size="icon"
+				class=""
 			>
 				<X size={18} aria-hidden="true" />
-			</button>
+			</Button>
 		</div>
 
 		<div class="min-h-0 overflow-y-auto overscroll-contain px-5 pb-8">
@@ -139,7 +144,7 @@
 				/>
 			{:else}
 				<div
-					class="grid h-28 w-full place-items-center rounded-[22px] bg-[linear-gradient(135deg,var(--surface-raised),var(--focus-ring))] text-[var(--accent)]"
+					class="grid h-28 w-full place-items-center rounded-[22px] bg-[var(--surface-raised)] text-[var(--accent)]"
 					aria-hidden="true"
 				>
 					<MapPin size={34} strokeWidth={1.6} />
@@ -235,14 +240,16 @@
 											{formatTime(slot.starts_at)}–{formatTime(slot.ends_at)}
 										</p>
 									</div>
-									<button
-										class="min-h-11 shrink-0 rounded-2xl border border-[var(--border)] px-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
+									<Button
 										type="button"
 										disabled={pendingAction !== ''}
 										onclick={() => scheduleGame(slot)}
+										variant="outline"
+										size="default"
+										class="shrink-0"
 									>
 										{pendingAction === `slot-${slot.id}` ? 'Agendando…' : 'Criar jogo'}
-									</button>
+									</Button>
 								</article>
 							{/each}
 						</div>
