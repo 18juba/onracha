@@ -7,6 +7,7 @@
 	--app-background: #15121e;
 	--surface: rgb(36 33 45 / 82%);
 	--surface-raised: #25212e;
+	--bottom-navigation-background: #100e18;
 	--field-background: rgb(27 24 36 / 86%);
 	--text-primary: #f8f7fb;
 	--text-secondary: #aaa6b6;
@@ -26,6 +27,7 @@
 	--app-background: #fff;
 	--surface: rgb(246 249 250 / 92%);
 	--surface-raised: #f2f6f7;
+	--bottom-navigation-background: #eef2f4;
 	--field-background: #f5f8f9;
 	--text-primary: #171923;
 	--text-secondary: #5e6571;

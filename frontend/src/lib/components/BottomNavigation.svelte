@@ -11,43 +11,51 @@
 </script>
 
 <nav
-	class="grid grid-cols-4 gap-1 border-t border-[var(--border)] bg-[var(--surface)] px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur-xl"
+	class="grid grid-cols-4 bg-[var(--bottom-navigation-background)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur-xl"
 	aria-label="Navegação principal"
 >
 	<button
-		class={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium transition-colors focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'buscar' ? 'bg-[var(--focus-ring)] text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]'}`}
+		class={`flex min-h-[56px] min-w-0 items-center justify-center border-t-2 border-transparent text-[9px] font-medium transition-[color,opacity,border-color] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'buscar' ? 'border-t-[var(--accent)] text-[var(--accent)] opacity-100' : 'text-[var(--text-secondary)] opacity-45 hover:text-[var(--text-primary)] hover:opacity-80'}`}
 		type="button"
 		aria-current={activeTab === 'buscar' ? 'page' : undefined}
 		onclick={() => onSelect('buscar')}
 	>
-		<MapPin size={20} strokeWidth={2} aria-hidden="true" />
-		<span>Buscar</span>
+		<span class="flex flex-col items-center justify-center gap-1 px-1.5 pt-2">
+			<MapPin size={18} strokeWidth={1.8} aria-hidden="true" />
+			<span>Buscar</span>
+		</span>
 	</button>
 	<button
-		class={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium transition-colors focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'jogos' ? 'bg-[var(--focus-ring)] text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]'}`}
+		class={`flex min-h-[56px] min-w-0 items-center justify-center border-t-2 border-transparent text-[9px] font-medium transition-[color,opacity,border-color] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'jogos' ? 'border-t-[var(--accent)] text-[var(--accent)] opacity-100' : 'text-[var(--text-secondary)] opacity-45 hover:text-[var(--text-primary)] hover:opacity-80'}`}
 		type="button"
 		aria-current={activeTab === 'jogos' ? 'page' : undefined}
 		onclick={() => onSelect('jogos')}
 	>
-		<CalendarDays size={20} strokeWidth={2} aria-hidden="true" />
-		<span>Jogos</span>
+		<span class="flex flex-col items-center justify-center gap-1 px-1.5 pt-2">
+			<CalendarDays size={18} strokeWidth={1.8} aria-hidden="true" />
+			<span>Jogos</span>
+		</span>
 	</button>
 	<button
-		class={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium transition-colors focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'arenas' ? 'bg-[var(--focus-ring)] text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]'}`}
+		class={`flex min-h-[56px] min-w-0 items-center justify-center border-t-2 border-transparent text-[9px] font-medium transition-[color,opacity,border-color] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'arenas' ? 'border-t-[var(--accent)] text-[var(--accent)] opacity-100' : 'text-[var(--text-secondary)] opacity-45 hover:text-[var(--text-primary)] hover:opacity-80'}`}
 		type="button"
 		aria-current={activeTab === 'arenas' ? 'page' : undefined}
 		onclick={() => onSelect('arenas')}
 	>
-		<Building2 size={20} strokeWidth={2} aria-hidden="true" />
-		<span>Arenas</span>
+		<span class="flex flex-col items-center justify-center gap-1 px-1.5 pt-2">
+			<Building2 size={18} strokeWidth={1.8} aria-hidden="true" />
+			<span>Arenas</span>
+		</span>
 	</button>
 	<button
-		class={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium transition-colors focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'perfil' ? 'bg-[var(--focus-ring)] text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]'}`}
+		class={`flex min-h-[56px] min-w-0 items-center justify-center border-t-2 border-transparent text-[9px] font-medium transition-[color,opacity,border-color] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none ${activeTab === 'perfil' ? 'border-t-[var(--accent)] text-[var(--accent)] opacity-100' : 'text-[var(--text-secondary)] opacity-45 hover:text-[var(--text-primary)] hover:opacity-80'}`}
 		type="button"
 		aria-current={activeTab === 'perfil' ? 'page' : undefined}
 		onclick={() => onSelect('perfil')}
 	>
-		<UserRound size={20} strokeWidth={2} aria-hidden="true" />
-		<span>Perfil</span>
+		<span class="flex flex-col items-center justify-center gap-1 px-1.5 pt-2">
+			<UserRound size={18} strokeWidth={1.8} aria-hidden="true" />
+			<span>Perfil</span>
+		</span>
 	</button>
 </nav>

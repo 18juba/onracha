@@ -2,9 +2,8 @@
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
-	import '@fontsource/be-vietnam-pro';
 	import '@fontsource-variable/noto-sans-bengali';
-	
+
 	let { children }: LayoutProps = $props();
 </script>
 
