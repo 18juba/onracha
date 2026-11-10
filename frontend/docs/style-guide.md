@@ -7,6 +7,7 @@ Este guia define a identidade visual do ON Racha e orienta as telas e componente
 - Visual moderno, simples e inspirado na linguagem de componentes do shadcn: superfícies neutras, bordas discretas e ações ghost como padrão secundário.
 - Reserve o acento verde-azulado dessaturado para a ação principal, seleção e estados ativos. Evite grandes áreas de cor saturada.
 - Mostre primeiro a tarefa principal. Use rótulos curtos, hierarquia tipográfica clara e pouca decoração.
+- Use a pilha de fontes sem serifa definida globalmente em `src/routes/layout.css`; a interface não usa Inter.
 - A aplicação é mobile-first. Em telas maiores, mantenha o container central com largura máxima de `430px`.
 - Preserve áreas seguras do dispositivo e os alvos de toque de pelo menos `44px`.
 
