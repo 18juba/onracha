@@ -13,7 +13,6 @@
 	type UserLocation = {
 		latitude: number;
 		longitude: number;
-		accuracy: number;
 	};
 	type Props = {
 		theme: Theme;
@@ -75,7 +74,6 @@
 		let map: import('leaflet').Map | undefined;
 		let userMarker: import('leaflet').Marker | undefined;
 		let selectionMarker: import('leaflet').Marker | undefined;
-		let accuracyCircle: import('leaflet').Circle | undefined;
 		let lastDiscoveryCoverage: (DiscoveryCoverage & { center: [number, number] }) | null = null;
 		const arenaMarkers: { id: number; marker: import('leaflet').Marker }[] = [];
 		let availableGameCounts: Record<number, number> = {};
@@ -338,25 +336,6 @@
 			const position: [number, number] = [location.latitude, location.longitude];
 			map.setView(position, CITY_ZOOM);
 
-			if (!accuracyCircle) {
-				const accentColor =
-					getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() ||
-					'#8bcac2';
-				accuracyCircle = leaflet
-					.circle(position, {
-						radius: Math.max(location.accuracy, 30),
-						color: accentColor,
-						weight: 1,
-						fillColor: accentColor,
-						fillOpacity: 0.12,
-						interactive: false
-					})
-					.addTo(map);
-			} else {
-				accuracyCircle.setLatLng(position);
-				accuracyCircle.setRadius(Math.max(location.accuracy, 30));
-			}
-
 			if (!userMarker) {
 				const icon = leaflet.divIcon({
 					className: 'onracha-location-marker',
@@ -389,8 +368,7 @@
 
 					showUserLocation({
 						latitude: position.coords.latitude,
-						longitude: position.coords.longitude,
-						accuracy: position.coords.accuracy
+						longitude: position.coords.longitude
 					});
 				},
 				(error) => {
