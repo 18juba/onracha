@@ -1,19 +1,30 @@
 <script lang="ts">
-	import { LocateFixed, LoaderCircle, Minus, Plus } from '@lucide/svelte';
+	import { LocateFixed, LoaderCircle, MapPin, Minus, Plus } from '@lucide/svelte';
 	import type { Theme } from '../theme';
 
+	type Coordinates = { latitude: number; longitude: number };
 	type UserLocation = {
 		latitude: number;
 		longitude: number;
 		accuracy: number;
 	};
-	type Props = { theme: Theme };
+	type Props = {
+		theme: Theme;
+		selectable?: boolean;
+		selectedLocation?: Coordinates | null;
+		onSelectLocation?: (location: Coordinates) => void;
+	};
 
 	const CITY_ZOOM = 12.5;
 	const BRAZIL_CENTER: [number, number] = [-14.235, -51.9253];
 	const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-	let { theme }: Props = $props();
+	let {
+		theme,
+		selectable = false,
+		selectedLocation = null,
+		onSelectLocation = () => {}
+	}: Props = $props();
 	let locationStatus = $state<'loading' | 'ready' | 'error'>('loading');
 	let locationMessage = $state('');
 	let mapLoadError = $state(false);
@@ -29,10 +40,36 @@
 		let requestNumber = 0;
 		let locationRequestStarted = false;
 		let userLocation: UserLocation | null = null;
+		let currentSelection = selectedLocation;
 		let leaflet: typeof import('leaflet') | undefined;
 		let map: import('leaflet').Map | undefined;
 		let userMarker: import('leaflet').Marker | undefined;
+		let selectionMarker: import('leaflet').Marker | undefined;
 		let accuracyCircle: import('leaflet').Circle | undefined;
+
+		function showSelectedLocation(location: Coordinates) {
+			currentSelection = location;
+			if (!map || !leaflet) return;
+
+			const position: [number, number] = [location.latitude, location.longitude];
+			if (!selectionMarker) {
+				const icon = leaflet.divIcon({
+					className: 'onracha-selection-marker',
+					html: '<span aria-hidden="true"></span>',
+					iconSize: [40, 40],
+					iconAnchor: [20, 38]
+				});
+				selectionMarker = leaflet
+					.marker(position, {
+						icon,
+						keyboard: false,
+						title: 'Local selecionado para a arena'
+					})
+					.addTo(map);
+			} else {
+				selectionMarker.setLatLng(position);
+			}
+		}
 
 		function showUserLocation(location: UserLocation) {
 			userLocation = location;
@@ -41,7 +78,7 @@
 			if (!map || !leaflet) return;
 
 			const position: [number, number] = [location.latitude, location.longitude];
-			map.setView(position, CITY_ZOOM);
+			if (!selectable || !currentSelection) map.setView(position, CITY_ZOOM);
 
 			if (!accuracyCircle) {
 				accuracyCircle = leaflet
@@ -150,6 +187,18 @@
 			mapControls.zoomOut = () => map?.zoomOut();
 			window.requestAnimationFrame(() => map?.invalidateSize());
 
+			if (selectable) {
+				map.on('click', (event: import('leaflet').LeafletMouseEvent) => {
+					const location = {
+						latitude: event.latlng.lat,
+						longitude: event.latlng.lng
+					};
+					showSelectedLocation(location);
+					onSelectLocation(location);
+				});
+			}
+
+			if (currentSelection) showSelectedLocation(currentSelection);
 			if (userLocation) showUserLocation(userLocation);
 			if (!locationRequestStarted) locateUser();
 		}
@@ -171,11 +220,24 @@
 </script>
 
 <div
-	class={`map-surface relative min-h-0 flex-1 overflow-hidden ${theme === 'dark' ? 'map-surface-dark' : 'map-surface-light'}`}
+	class={`map-surface relative min-h-0 flex-1 overflow-hidden ${theme === 'dark' ? 'map-surface-dark' : 'map-surface-light'} ${selectable ? 'map-surface-selectable' : ''}`}
 	role="region"
-	aria-label="Mapa interativo da sua região"
+	aria-label={selectable
+		? 'Mapa para selecionar o local da arena'
+		: 'Mapa interativo da sua região'}
 >
 	<div class="absolute inset-0" {@attach attachMap}></div>
+
+	{#if selectable}
+		<div
+			class="absolute top-4 left-4 z-[500] flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-lg backdrop-blur-xl"
+			role="status"
+			aria-live="polite"
+		>
+			<MapPin size={16} class="text-[var(--accent)]" aria-hidden="true" />
+			<span>{selectedLocation ? 'Local marcado' : 'Toque no mapa para marcar'}</span>
+		</div>
+	{/if}
 
 	{#if mapLoadError}
 		<div
@@ -245,6 +307,10 @@
 		font-family: inherit;
 	}
 
+	.map-surface-selectable :global(.leaflet-grab) {
+		cursor: crosshair;
+	}
+
 	.map-surface :global(.leaflet-tile-pane) {
 		transition: filter 240ms ease;
 	}
@@ -284,6 +350,35 @@
 		border-radius: 9999px;
 		background: var(--accent);
 		box-shadow: 0 0 0 5px rgb(9 176 244 / 20%);
+	}
+
+	:global(.onracha-selection-marker) {
+		border: 0;
+		background: transparent;
+	}
+
+	:global(.onracha-selection-marker span) {
+		position: relative;
+		display: block;
+		width: 30px;
+		height: 30px;
+		margin: 3px 5px 7px;
+		border: 3px solid var(--app-background);
+		border-radius: 50% 50% 50% 0;
+		background: var(--accent);
+		box-shadow: 0 3px 12px rgb(0 0 0 / 25%);
+		transform: rotate(-45deg);
+	}
+
+	:global(.onracha-selection-marker span)::after {
+		position: absolute;
+		top: 7px;
+		left: 7px;
+		width: 10px;
+		height: 10px;
+		border-radius: 9999px;
+		background: var(--app-background);
+		content: '';
 	}
 
 	@media (prefers-reduced-motion: reduce) {

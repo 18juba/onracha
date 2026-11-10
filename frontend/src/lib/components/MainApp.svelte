@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { Building2, CalendarDays, UserRound } from '@lucide/svelte';
+	import { CalendarDays, UserRound } from '@lucide/svelte';
 	import type { User } from '../api';
 	import type { Theme } from '../theme';
+	import ArenaManagement from './ArenaManagement.svelte';
 	import BottomNavigation from './BottomNavigation.svelte';
 	import MapView from './MapView.svelte';
 
@@ -45,12 +46,7 @@
 					<h1 class="text-2xl font-semibold tracking-tight">Jogos</h1>
 				</section>
 			{:else if activeTab === 'arenas'}
-				<section
-					class="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-[var(--app-background)]"
-				>
-					<Building2 size={34} strokeWidth={1.7} class="text-[var(--accent)]" aria-hidden="true" />
-					<h1 class="text-2xl font-semibold tracking-tight">Arenas</h1>
-				</section>
+				<ArenaManagement {theme} />
 			{:else if activeTab === 'perfil'}
 				<section
 					class="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-[var(--app-background)] text-center"

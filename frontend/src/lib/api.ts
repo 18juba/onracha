@@ -5,6 +5,31 @@ export type User = {
 	created_at: string;
 };
 
+export type Arena = {
+	id: number;
+	owner_user_id: number;
+	name: string;
+	arena_type: string;
+	address: string;
+	city: string;
+	state: string;
+	latitude: number | null;
+	longitude: number | null;
+	photo_url: string | null;
+	active: boolean;
+	created_at: string;
+};
+
+export type CreateArenaInput = {
+	name: string;
+	arena_type: string;
+	address: string;
+	city: string;
+	state: string;
+	latitude: number;
+	longitude: number;
+};
+
 export class ApiError extends Error {
 	constructor(
 		message: string,
@@ -77,5 +102,16 @@ export const api = {
 
 	me(): Promise<User> {
 		return request('/api/v1/auth/me');
+	},
+
+	listArenas(): Promise<Arena[]> {
+		return request('/api/v1/arenas');
+	},
+
+	createArena(input: CreateArenaInput): Promise<Arena> {
+		return request('/api/v1/arenas', {
+			method: 'POST',
+			body: JSON.stringify(input)
+		});
 	}
 };
