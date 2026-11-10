@@ -9,13 +9,15 @@ flowchart LR
     A[Acessar ONRACHA] --> B[Entrar ou criar conta]
     B --> C{O que deseja fazer?}
 
-    C -->|Quero organizar| D[Cadastrar arena]
-    D --> E[Organizar um racha]
+    C -->|Tenho arena| D[Cadastrar arena]
+    D --> E[Gerenciar horários]
 
-    C -->|Quero jogar| F[Encontrar um racha]
+    C -->|Quero organizar| F[Organizar um racha]
 
-    E --> G[Participar da partida]
-    F --> G
+    C -->|Quero jogar| G[Encontrar um racha]
+
+    F --> H[Participar da partida]
+    G --> H
 ```
 
 ## Executar com Docker Compose
