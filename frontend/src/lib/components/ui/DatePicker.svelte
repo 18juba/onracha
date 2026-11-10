@@ -155,7 +155,7 @@
 				>
 					<ChevronLeft size={16} aria-hidden="true" />
 				</Button>
-				<h2 class="text-sm font-medium capitalize text-[var(--text-primary)]">{monthLabel}</h2>
+				<h2 class="text-sm font-medium text-[var(--text-primary)] capitalize">{monthLabel}</h2>
 				<Button variant="ghost" size="icon" aria-label="Próximo mês" onclick={() => shiftMonth(1)}>
 					<ChevronRight size={16} aria-hidden="true" />
 				</Button>

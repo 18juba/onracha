@@ -117,6 +117,19 @@ func (s *Service) Authenticate(ctx context.Context, token string) (User, error) 
 	return user, nil
 }
 
+// Logout revokes one session without persisting or logging its raw token.
+func (s *Service) Logout(ctx context.Context, token string) error {
+	if token == "" {
+		return nil
+	}
+
+	tokenHash := sha256.Sum256([]byte(token))
+	if err := s.repository.DeleteSession(ctx, tokenHash[:]); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) hashForUnknownUser(password string) {
 	_, _ = s.passwordHasher.Hash(password)
 }

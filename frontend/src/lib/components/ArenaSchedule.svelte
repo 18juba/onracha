@@ -116,7 +116,7 @@
 		}
 	}
 
-	async function toggleActive(_nextActive: boolean): Promise<boolean> {
+	async function toggleActive(): Promise<boolean> {
 		activeError = '';
 		isUpdatingActive = true;
 

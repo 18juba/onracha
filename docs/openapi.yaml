@@ -124,6 +124,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/auth/logout:
+    post:
+      summary: Encerra a sessão atual
+      operationId: logout
+      security:
+        - cookieAuth: []
+      responses:
+        '204':
+          description: Sessão revogada e cookie de sessão expirado
+          headers:
+            Set-Cookie:
+              description: Expira o cookie HttpOnly da sessão atual.
+              schema:
+                type: string
+        '500':
+          description: Erro interno ao revogar a sessão
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/auth/me:
     get:
       summary: Retorna a conta da sessão atual

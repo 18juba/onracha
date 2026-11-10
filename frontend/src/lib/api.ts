@@ -187,6 +187,10 @@ export const api = {
 		});
 	},
 
+	logout(): Promise<void> {
+		return request('/api/v1/auth/logout', { method: 'POST' });
+	},
+
 	me(): Promise<User> {
 		return request('/api/v1/auth/me');
 	},

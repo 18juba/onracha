@@ -218,6 +218,17 @@ func (r *fakeRepository) FindUserBySession(_ context.Context, tokenHash []byte, 
 	return r.sessionUser, nil
 }
 
+func (r *fakeRepository) DeleteSession(_ context.Context, tokenHash []byte) error {
+	activeSessions := r.sessions[:0]
+	for _, session := range r.sessions {
+		if string(session.tokenHash) != string(tokenHash) {
+			activeSessions = append(activeSessions, session)
+		}
+	}
+	r.sessions = activeSessions
+	return nil
+}
+
 type fakePasswordHasher struct {
 	hash      string
 	hashCalls int

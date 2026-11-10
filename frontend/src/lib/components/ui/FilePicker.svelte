@@ -13,7 +13,7 @@
 </script>
 
 <label
-	class="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-raised)] px-4 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-within:ring-2 focus-within:ring-[var(--focus-ring)] motion-reduce:transition-none"
+	class="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-raised)] px-4 text-sm font-medium text-[var(--text-primary)] transition-colors focus-within:ring-2 focus-within:ring-[var(--focus-ring)] hover:bg-[var(--surface)] motion-reduce:transition-none"
 >
 	{#key inputKey}
 		<input class="sr-only" type="file" {accept} {name} {onchange} />

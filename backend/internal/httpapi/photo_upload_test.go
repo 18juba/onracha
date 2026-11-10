@@ -174,6 +174,10 @@ func (photoUploadAuthService) Login(context.Context, string, string) (auth.User,
 	return auth.User{}, auth.Session{}, errors.New("not used in photo upload test")
 }
 
+func (photoUploadAuthService) Logout(context.Context, string) error {
+	return nil
+}
+
 func (photoUploadAuthService) Authenticate(_ context.Context, token string) (auth.User, error) {
 	switch token {
 	case "valid-session":

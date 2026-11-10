@@ -48,7 +48,7 @@
 	{...rest}
 	{type}
 	data-variant={variant}
-	class={'inline-flex shrink-0 items-center justify-center gap-2 font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-background)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:transform-none ' +
+	class={'inline-flex shrink-0 items-center justify-center gap-2 font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-150 focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-background)] focus-visible:outline-none active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:transform-none ' +
 		variants[variant] +
 		' ' +
 		sizes[size] +

@@ -79,3 +79,12 @@ func (r *AuthRepository) FindUserBySession(ctx context.Context, tokenHash []byte
 	}
 	return user, nil
 }
+
+// DeleteSession revokes the session identified by its token hash.
+func (r *AuthRepository) DeleteSession(ctx context.Context, tokenHash []byte) error {
+	const query = `DELETE FROM sessions WHERE token_hash = $1`
+	if _, err := r.db.ExecContext(ctx, query, tokenHash); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}

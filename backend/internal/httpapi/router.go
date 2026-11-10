@@ -26,6 +26,7 @@ type AuthService interface {
 	Register(ctx context.Context, name, email, password string) (auth.User, error)
 	Login(ctx context.Context, email, password string) (auth.User, auth.Session, error)
 	Authenticate(ctx context.Context, token string) (auth.User, error)
+	Logout(ctx context.Context, token string) error
 }
 
 // ArenaService describes arena operations exposed over HTTP.
@@ -89,6 +90,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("GET /swagger/", api.swaggerUI)
 	mux.HandleFunc("POST /api/v1/auth/register", api.register)
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", api.logout)
 	mux.HandleFunc("GET /api/v1/auth/me", api.me)
 	mux.HandleFunc("GET /api/v1/arenas", api.listArenas)
 	mux.HandleFunc("GET /api/v1/arenas/discover", api.discoverArenas)
@@ -187,6 +189,28 @@ func (h *handler) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, user)
+}
+
+func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		if err := h.authService.Logout(r.Context(), cookie.Value); err != nil {
+			h.logger.Error("account logout failed")
+			writeError(w, http.StatusInternalServerError, "internal_error", "Não foi possível encerrar a sessão.")
+			return
+		}
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.config.SecureCookies,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) listArenas(w http.ResponseWriter, r *http.Request) {
