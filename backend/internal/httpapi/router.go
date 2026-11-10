@@ -47,6 +47,7 @@ type GameService interface {
 	ListByArena(ctx context.Context, arenaID int64) ([]game.Game, error)
 	ListByParticipant(ctx context.Context, userID int64) ([]game.Game, error)
 	GetByID(ctx context.Context, gameID int64) (game.Game, error)
+	GetLobbyByID(ctx context.Context, gameID int64) (game.GameLobby, error)
 	Join(ctx context.Context, gameID, userID int64) (game.Game, error)
 	Leave(ctx context.Context, gameID, userID int64) error
 	SearchAvailable(ctx context.Context, userID int64, filters game.SearchFilters) ([]game.SearchResult, error)
@@ -100,6 +101,7 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("GET /api/v1/me/games", api.listMyGames)
 	mux.HandleFunc("GET /api/v1/games", api.searchGames)
 	mux.HandleFunc("GET /api/v1/games/{id}", api.getGame)
+	mux.HandleFunc("GET /api/v1/games/{id}/lobby", api.getGameLobby)
 	mux.HandleFunc("POST /api/v1/time-slots/{id}/games", api.scheduleGame)
 	mux.HandleFunc("POST /api/v1/games/{id}/join", api.joinGame)
 	mux.HandleFunc("DELETE /api/v1/games/{id}/participants/me", api.leaveGame)
@@ -590,9 +592,8 @@ func (h *handler) getGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gameID, validID := parsePositiveID(r.PathValue("id"))
-	if !validID {
-		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+	gameID, ok := parseGameID(w, r)
+	if !ok {
 		return
 	}
 
@@ -604,15 +605,32 @@ func (h *handler) getGame(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, value)
 }
 
+func (h *handler) getGameLobby(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+
+	gameID, ok := parseGameID(w, r)
+	if !ok {
+		return
+	}
+
+	value, err := h.gameService.GetLobbyByID(r.Context(), gameID)
+	if err != nil {
+		h.writeGameError(w, err, "game lobby lookup failed", "Não foi possível consultar o lobby do jogo.")
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
+}
+
 func (h *handler) joinGame(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.authenticatedUser(w, r)
 	if !ok {
 		return
 	}
 
-	gameID, validID := parsePositiveID(r.PathValue("id"))
-	if !validID {
-		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+	gameID, ok := parseGameID(w, r)
+	if !ok {
 		return
 	}
 
@@ -630,9 +648,8 @@ func (h *handler) leaveGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gameID, validID := parsePositiveID(r.PathValue("id"))
-	if !validID {
-		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+	gameID, ok := parseGameID(w, r)
+	if !ok {
 		return
 	}
 
@@ -668,6 +685,15 @@ func parseArenaID(value string) (int64, error) {
 		return 0, arena.ErrInvalidArenaID
 	}
 	return arenaID, nil
+}
+
+func parseGameID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	gameID, valid := parsePositiveID(r.PathValue("id"))
+	if !valid {
+		writeError(w, http.StatusBadRequest, "invalid_game_id", "O identificador do jogo é inválido.")
+		return 0, false
+	}
+	return gameID, true
 }
 
 func parsePositiveID(value string) (int64, bool) {

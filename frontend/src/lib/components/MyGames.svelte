@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import {
 		CalendarDays,
 		Clock3,
 		LoaderCircle,
 		MapPin,
+		ChevronRight,
 		RefreshCw,
 		UsersRound
 	} from '@lucide/svelte';
@@ -125,57 +127,67 @@
 				{#each games as game (game.id)}
 					{@const arena = findArena(game.arena_id)}
 					<article
-						class="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm"
+						class="overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--surface)] shadow-sm transition-colors hover:border-[var(--accent)]/45"
 					>
-						<div class="flex items-start justify-between gap-3">
-							<div class="flex min-w-0 items-center gap-3">
-								{#if arena?.photo_url}
-									<img
-										class="size-14 shrink-0 rounded-2xl object-cover"
-										src={arena.photo_url}
-										alt={`Foto de ${arena.name}`}
-									/>
-								{:else}
-									<div
-										class="grid size-14 shrink-0 place-items-center rounded-2xl bg-[var(--focus-ring)] text-[var(--accent)]"
-										aria-hidden="true"
-									>
-										<MapPin size={21} />
-									</div>
-								{/if}
-								<div class="min-w-0">
-									<p class="text-base font-semibold capitalize">{formatDay(game.starts_at)}</p>
-									<p class="mt-1 truncate text-sm text-[var(--text-secondary)]">
-										{arena?.name ?? `Arena ${game.arena_id}`}
-									</p>
-									{#if arena}
-										<p class="mt-1 truncate text-xs text-[var(--text-secondary)]">
-											{arena.city}, {arena.state}
-										</p>
-									{/if}
-								</div>
-							</div>
-							<span
-								class="shrink-0 rounded-full bg-[var(--focus-ring)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]"
-							>
-								{userID !== null && game.organizer_user_id === userID
-									? 'Organizando'
-									: 'Confirmado'}
-							</span>
-						</div>
-
-						<div
-							class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]"
+						<a
+							class="block p-4 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+							href={resolve('/(app)/jogos/[id]', { id: String(game.id) })}
 						>
-							<span class="inline-flex items-center gap-1.5">
-								<Clock3 size={15} aria-hidden="true" />
-								{formatTime(game.starts_at)}–{formatTime(game.ends_at)}
-							</span>
-							<span class="inline-flex items-center gap-1.5">
-								<UsersRound size={15} aria-hidden="true" />
-								{game.participant_user_ids.length} confirmados
-							</span>
-						</div>
+							<div class="flex items-start justify-between gap-3">
+								<div class="flex min-w-0 items-center gap-3">
+									{#if arena?.photo_url}
+										<img
+											class="size-14 shrink-0 rounded-2xl object-cover"
+											src={arena.photo_url}
+											alt={`Foto de ${arena.name}`}
+										/>
+									{:else}
+										<div
+											class="grid size-14 shrink-0 place-items-center rounded-2xl bg-[var(--focus-ring)] text-[var(--accent)]"
+											aria-hidden="true"
+										>
+											<MapPin size={21} />
+										</div>
+									{/if}
+									<div class="min-w-0">
+										<p class="text-base font-semibold capitalize">{formatDay(game.starts_at)}</p>
+										<p class="mt-1 truncate text-sm text-[var(--text-secondary)]">
+											{arena?.name ?? `Arena ${game.arena_id}`}
+										</p>
+										{#if arena}
+											<p class="mt-1 truncate text-xs text-[var(--text-secondary)]">
+												{arena.city}, {arena.state}
+											</p>
+										{/if}
+									</div>
+								</div>
+								<span
+									class="shrink-0 rounded-full bg-[var(--focus-ring)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]"
+								>
+									{userID !== null && game.organizer_user_id === userID
+										? 'Organizando'
+										: 'Confirmado'}
+								</span>
+								<ChevronRight
+									size={18}
+									class="shrink-0 text-[var(--text-secondary)]"
+									aria-hidden="true"
+								/>
+							</div>
+
+							<div
+								class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]"
+							>
+								<span class="inline-flex items-center gap-1.5">
+									<Clock3 size={15} aria-hidden="true" />
+									{formatTime(game.starts_at)}–{formatTime(game.ends_at)}
+								</span>
+								<span class="inline-flex items-center gap-1.5">
+									<UsersRound size={15} aria-hidden="true" />
+									{game.participant_user_ids.length} confirmados
+								</span>
+							</div>
+						</a>
 					</article>
 				{/each}
 			</div>

@@ -42,6 +42,19 @@ type Game struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// GameLobby contains a game's public details and displayable participant names.
+type GameLobby struct {
+	Game         Game                 `json:"game"`
+	Arena        ArenaSummary         `json:"arena"`
+	Participants []ParticipantSummary `json:"participants"`
+}
+
+// ParticipantSummary contains the public profile details shown in a game lobby.
+type ParticipantSummary struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // SearchFilters narrows the games a user can discover.
 type SearchFilters struct {
 	City      string

@@ -1,6 +1,16 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { CalendarDays, Clock3, LoaderCircle, MapPin, UsersRound, X } from '@lucide/svelte';
+	import {
+		CalendarDays,
+		ChevronRight,
+		Clock3,
+		LoaderCircle,
+		MapPin,
+		UsersRound,
+		X
+	} from '@lucide/svelte';
 	import { api, type DiscoveredArena, type GameSearchResult, type TimeSlot } from '../api';
 	import { getUserFacingErrorMessage } from '../errors';
 
@@ -17,7 +27,6 @@
 	let pendingAction = $state('');
 	let loadError = $state('');
 	let actionError = $state('');
-	let successMessage = $state('');
 	let arenaGames = $derived(availableGames.filter((result) => result.arena.id === arena.id));
 
 	onMount(() => {
@@ -57,34 +66,19 @@
 	async function scheduleGame(slot: TimeSlot) {
 		pendingAction = `slot-${slot.id}`;
 		actionError = '';
-		successMessage = '';
+		let createdGame: GameSearchResult['game'] | null = null;
 
 		try {
-			await api.scheduleGame(slot.id);
-			onGamesChanged();
-			successMessage = 'Jogo agendado. Você já está confirmado.';
-			await loadDetails();
+			createdGame = await api.scheduleGame(slot.id);
 		} catch (error) {
 			actionError = getUserFacingErrorMessage(error, 'Não foi possível agendar esse jogo.');
 		} finally {
 			pendingAction = '';
 		}
-	}
 
-	async function joinGame(gameID: number) {
-		pendingAction = `game-${gameID}`;
-		actionError = '';
-		successMessage = '';
-
-		try {
-			await api.joinGame(gameID);
+		if (createdGame) {
 			onGamesChanged();
-			successMessage = 'Presença confirmada. O jogo está na sua lista.';
-			await loadDetails();
-		} catch (error) {
-			actionError = getUserFacingErrorMessage(error, 'Não foi possível entrar nesse jogo.');
-		} finally {
-			pendingAction = '';
+			await goto(resolve('/(app)/jogos/[id]', { id: String(createdGame.id) }));
 		}
 	}
 
@@ -163,14 +157,6 @@
 				<p class="mt-1 text-sm text-[var(--text-secondary)]">{arena.address}</p>
 			</div>
 
-			{#if successMessage}
-				<p
-					class="mt-4 rounded-2xl border border-[var(--accent)]/25 bg-[var(--focus-ring)] px-4 py-3 text-sm font-medium text-[var(--text-primary)]"
-					role="status"
-				>
-					{successMessage}
-				</p>
-			{/if}
 			{#if actionError || loadError}
 				<p class="mt-4 rounded-2xl bg-[var(--surface)] px-4 py-3 text-sm" role="alert">
 					{actionError || loadError}
@@ -195,8 +181,9 @@
 					{#if arenaGames.length > 0}
 						<div class="grid gap-2.5">
 							{#each arenaGames as result (result.game.id)}
-								<article
-									class="flex items-center gap-3 rounded-[22px] border border-[var(--border)] bg-[var(--surface)] p-3.5"
+								<a
+									class="flex items-center gap-3 rounded-[22px] border border-[var(--border)] bg-[var(--surface)] p-3.5 text-left transition-colors hover:border-[var(--accent)]/45 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+									href={resolve('/(app)/jogos/[id]', { id: String(result.game.id) })}
 								>
 									<div class="min-w-0 flex-1">
 										<p class="text-sm font-semibold capitalize">
@@ -211,15 +198,13 @@
 											{result.game.participant_user_ids.length} confirmados
 										</p>
 									</div>
-									<button
-										class="min-h-11 shrink-0 rounded-2xl bg-[var(--accent)] px-3.5 text-sm font-semibold text-slate-950 transition-transform focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none active:scale-[0.98] disabled:opacity-60"
-										type="button"
-										disabled={pendingAction !== ''}
-										onclick={() => joinGame(result.game.id)}
+									<span
+										class="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[var(--accent)]"
 									>
-										{pendingAction === `game-${result.game.id}` ? 'Entrando…' : 'Entrar'}
-									</button>
-								</article>
+										Ver sala
+										<ChevronRight size={17} aria-hidden="true" />
+									</span>
+								</a>
 							{/each}
 						</div>
 					{:else}

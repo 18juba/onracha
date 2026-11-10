@@ -371,6 +371,26 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 		t.Errorf("game details = %+v, want game %d in arena %d with organizer %d and two participants", gameDetails, firstGame.ID, arenas[0].ID, users[1].ID)
 	}
 
+	lobbyResponse := request(http.MethodGet, fmt.Sprintf("/api/v1/games/%d/lobby", firstGame.ID), nil, playerSession)
+	if lobbyResponse.Code != http.StatusOK {
+		t.Fatalf("get game lobby status = %d, want %d; body: %s", lobbyResponse.Code, http.StatusOK, lobbyResponse.Body.String())
+	}
+	var lobby game.GameLobby
+	if err := json.Unmarshal(lobbyResponse.Body.Bytes(), &lobby); err != nil {
+		t.Fatalf("decode game lobby: %v", err)
+	}
+	if lobby.Game.ID != firstGame.ID || lobby.Arena.ID != arenas[0].ID || lobby.Arena.Name != arenas[0].Name || len(lobby.Participants) != 2 {
+		t.Fatalf("game lobby = %+v, want game %d, arena %d, and both participants", lobby, firstGame.ID, arenas[0].ID)
+	}
+	if lobby.Participants[0].Name != users[1].Name || lobby.Participants[1].Name != users[2].Name {
+		t.Errorf("lobby participants = %+v, want %q and %q", lobby.Participants, users[1].Name, users[2].Name)
+	}
+
+	unauthenticatedGameLobby := request(http.MethodGet, fmt.Sprintf("/api/v1/games/%d/lobby", firstGame.ID), nil, nil)
+	if unauthenticatedGameLobby.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated game lobby status = %d, want %d", unauthenticatedGameLobby.Code, http.StatusUnauthorized)
+	}
+
 	missingGameResponse := request(http.MethodGet, "/api/v1/games/9223372036854775807", nil, playerSession)
 	if missingGameResponse.Code != http.StatusNotFound {
 		t.Errorf("missing game details status = %d, want %d", missingGameResponse.Code, http.StatusNotFound)

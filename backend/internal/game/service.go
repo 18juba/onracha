@@ -113,6 +113,19 @@ func (s *Service) GetByID(ctx context.Context, gameID int64) (Game, error) {
 	return value, nil
 }
 
+// GetLobbyByID returns one game with arena details and displayable participant names.
+func (s *Service) GetLobbyByID(ctx context.Context, gameID int64) (GameLobby, error) {
+	if gameID <= 0 {
+		return GameLobby{}, ErrInvalidGameID
+	}
+
+	value, err := s.games.GetLobbyByID(ctx, gameID)
+	if err != nil {
+		return GameLobby{}, fmt.Errorf("get game lobby by ID: %w", err)
+	}
+	return value, nil
+}
+
 // Join adds a user to a game unless the user already has an overlapping game.
 func (s *Service) Join(ctx context.Context, gameID, userID int64) (Game, error) {
 	if gameID <= 0 {

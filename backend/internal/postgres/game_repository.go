@@ -123,6 +123,75 @@ func (r *GameRepository) GetByID(ctx context.Context, gameID int64) (game.Game, 
 	return loadGame(ctx, r.db, gameID)
 }
 
+// GetLobbyByID returns one game with its arena and participant display names.
+func (r *GameRepository) GetLobbyByID(ctx context.Context, gameID int64) (game.GameLobby, error) {
+	const query = `
+		SELECT g.id, g.time_slot_id, slot.arena_id, g.organizer_user_id,
+		       slot.starts_at, slot.ends_at, g.created_at,
+		       arena.id, arena.name, arena.address, arena.city, arena.state,
+		       arena.latitude, arena.longitude, arena.photo_url,
+		       participant.user_id, player.name
+		FROM games AS g
+		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
+		JOIN arenas AS arena ON arena.id = slot.arena_id
+		LEFT JOIN game_participants AS participant ON participant.game_id = g.id
+		LEFT JOIN users AS player ON player.id = participant.user_id
+		WHERE g.id = $1
+		ORDER BY participant.user_id`
+
+	rows, err := r.db.QueryContext(ctx, query, gameID)
+	if err != nil {
+		return game.GameLobby{}, fmt.Errorf("query game lobby: %w", err)
+	}
+	defer rows.Close()
+
+	lobby := game.GameLobby{
+		Game:         game.Game{Participants: make([]int64, 0)},
+		Participants: make([]game.ParticipantSummary, 0),
+	}
+	found := false
+	for rows.Next() {
+		var participantID sql.NullInt64
+		var participantName sql.NullString
+		if err := rows.Scan(
+			&lobby.Game.ID,
+			&lobby.Game.TimeSlotID,
+			&lobby.Game.ArenaID,
+			&lobby.Game.OrganizerUserID,
+			&lobby.Game.StartsAt,
+			&lobby.Game.EndsAt,
+			&lobby.Game.CreatedAt,
+			&lobby.Arena.ID,
+			&lobby.Arena.Name,
+			&lobby.Arena.Address,
+			&lobby.Arena.City,
+			&lobby.Arena.State,
+			&lobby.Arena.Latitude,
+			&lobby.Arena.Longitude,
+			&lobby.Arena.PhotoURL,
+			&participantID,
+			&participantName,
+		); err != nil {
+			return game.GameLobby{}, fmt.Errorf("scan game lobby: %w", err)
+		}
+		found = true
+		if participantID.Valid {
+			lobby.Game.Participants = append(lobby.Game.Participants, participantID.Int64)
+			lobby.Participants = append(lobby.Participants, game.ParticipantSummary{
+				ID:   participantID.Int64,
+				Name: participantName.String,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return game.GameLobby{}, fmt.Errorf("iterate game lobby: %w", err)
+	}
+	if !found {
+		return game.GameLobby{}, game.ErrNotFound
+	}
+	return lobby, nil
+}
+
 // SearchAvailable returns upcoming games the user can join, with arena details.
 func (r *GameRepository) SearchAvailable(ctx context.Context, userID int64, filters game.SearchFilters) ([]game.SearchResult, error) {
 	const query = `

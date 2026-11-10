@@ -81,6 +81,17 @@ export type GameSearchResult = {
 	>;
 };
 
+export type GameParticipant = {
+	id: number;
+	name: string;
+};
+
+export type GameLobby = {
+	game: Game;
+	arena: GameSearchResult['arena'];
+	participants: GameParticipant[];
+};
+
 export class ApiError extends Error {
 	constructor(
 		message: string,
@@ -226,6 +237,10 @@ export const api = {
 		const queryString = query.toString();
 		const suffix = queryString ? `?${queryString}` : '';
 		return request(`/api/v1/games${suffix}`);
+	},
+
+	getGameLobby(gameID: number): Promise<GameLobby> {
+		return request(`/api/v1/games/${gameID}/lobby`);
 	},
 
 	createArenaTimeSlot(arenaID: number, input: CreateTimeSlotInput): Promise<TimeSlot> {

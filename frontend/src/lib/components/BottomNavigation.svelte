@@ -12,7 +12,9 @@
 	] as const;
 
 	let activeTab = $derived(
-		navigationItems.find((item) => item.path === page.url.pathname)?.id ?? 'buscar'
+		navigationItems.find(
+			(item) => page.url.pathname === item.path || page.url.pathname.startsWith(`${item.path}/`)
+		)?.id ?? 'buscar'
 	);
 </script>
 

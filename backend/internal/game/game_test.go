@@ -320,6 +320,41 @@ func TestServiceGetByIDReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceGetLobbyByIDReturnsLobby(t *testing.T) {
+	want := GameLobby{
+		Game:  Game{ID: 31, ArenaID: 23, Participants: []int64{17, 22}},
+		Arena: ArenaSummary{ID: 23, Name: "Campo Central"},
+		Participants: []ParticipantSummary{
+			{ID: 17, Name: "Organizador"},
+			{ID: 22, Name: "Jogador"},
+		},
+	}
+	repository := &fakeGameRepository{gameLobbyByID: want}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	got, err := service.GetLobbyByID(context.Background(), 31)
+	if err != nil {
+		t.Fatalf("GetLobbyByID() error = %v, want nil", err)
+	}
+	if repository.getLobbyByIDCalls != 1 || repository.requestedLobbyID != 31 ||
+		got.Game.ID != want.Game.ID || got.Arena.ID != want.Arena.ID || len(got.Participants) != 2 {
+		t.Errorf("GetLobbyByID() = %+v; repository calls=%d requested ID=%d, want %+v",
+			got, repository.getLobbyByIDCalls, repository.requestedLobbyID, want)
+	}
+}
+
+func TestServiceGetLobbyByIDRejectsInvalidID(t *testing.T) {
+	repository := &fakeGameRepository{}
+	service := NewService(&fakeTimeSlotRepository{}, repository)
+
+	if _, err := service.GetLobbyByID(context.Background(), 0); !errors.Is(err, ErrInvalidGameID) {
+		t.Fatalf("GetLobbyByID() error = %v, want %v", err, ErrInvalidGameID)
+	}
+	if repository.getLobbyByIDCalls != 0 {
+		t.Errorf("repository calls = %d, want 0", repository.getLobbyByIDCalls)
+	}
+}
+
 func TestServiceJoinPassesGameAndUser(t *testing.T) {
 	want := Game{ID: 31, Participants: []int64{17, 22}}
 	repository := &fakeGameRepository{joinedGame: want}
@@ -533,6 +568,10 @@ type fakeGameRepository struct {
 	requestedGameID      int64
 	gameByID             Game
 	getByIDError         error
+	getLobbyByIDCalls    int
+	requestedLobbyID     int64
+	gameLobbyByID        GameLobby
+	getLobbyByIDError    error
 	leaveCalls           int
 	leaveGameID          int64
 	leaveUserID          int64
@@ -570,6 +609,12 @@ func (r *fakeGameRepository) GetByID(_ context.Context, gameID int64) (Game, err
 	r.getByIDCalls++
 	r.requestedGameID = gameID
 	return r.gameByID, r.getByIDError
+}
+
+func (r *fakeGameRepository) GetLobbyByID(_ context.Context, gameID int64) (GameLobby, error) {
+	r.getLobbyByIDCalls++
+	r.requestedLobbyID = gameID
+	return r.gameLobbyByID, r.getLobbyByIDError
 }
 
 func (r *fakeGameRepository) Join(_ context.Context, gameID, userID int64) (Game, error) {
