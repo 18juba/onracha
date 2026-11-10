@@ -152,14 +152,15 @@
 					tabindex="-1"
 					onclick={() => choose(option)}
 					onpointerenter={() => (activeIndex = index)}
-					class={'w-full justify-between rounded-lg text-sm transition-colors ' +
+					class={'w-full justify-start rounded-lg text-left text-sm transition-colors ' +
 						(activeIndex === index
 							? 'bg-[var(--surface-raised)] text-[var(--text-primary)]'
 							: 'text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]')}
 				>
-					<span>{option.label}</span>
+					<span class="min-w-0 flex-1 text-left">{option.label}</span>
 					{#if option.value === value}
 						<span
+							class="ml-auto shrink-0"
 							transition:scale={{ duration: prefersReducedMotion.current ? 0 : 100, start: 0.7 }}
 						>
 							<Check size={15} class="text-[var(--accent)]" aria-hidden="true" />
