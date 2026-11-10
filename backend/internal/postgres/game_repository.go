@@ -33,16 +33,20 @@ func (r *GameRepository) Schedule(ctx context.Context, timeSlotID, organizerUser
 	}
 
 	var interval game.TimeSlot
+	var unavailable bool
 	if err := tx.QueryRowContext(ctx, `
-		SELECT id, arena_id, starts_at, ends_at
+		SELECT id, arena_id, starts_at, ends_at, closed_at IS NOT NULL OR starts_at <= NOW()
 		FROM arena_time_slots
 		WHERE id = $1
 		FOR UPDATE`, timeSlotID,
-	).Scan(&interval.ID, &interval.ArenaID, &interval.StartsAt, &interval.EndsAt); err != nil {
+	).Scan(&interval.ID, &interval.ArenaID, &interval.StartsAt, &interval.EndsAt, &unavailable); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return game.Game{}, game.ErrNotFound
 		}
 		return game.Game{}, fmt.Errorf("lock game time slot: %w", err)
+	}
+	if unavailable {
+		return game.Game{}, game.ErrTimeSlotUnavailable
 	}
 
 	var alreadyScheduled bool
@@ -95,6 +99,8 @@ func (r *GameRepository) ListByArena(ctx context.Context, arenaID int64) ([]game
 		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
 		LEFT JOIN game_participants AS participant ON participant.game_id = g.id
 		WHERE slot.arena_id = $1
+		  AND slot.closed_at IS NULL
+		  AND slot.ends_at > NOW()
 		ORDER BY slot.starts_at, g.id, participant.user_id`
 
 	return scanGames(ctx, r.db, query, arenaID)
@@ -112,7 +118,8 @@ func (r *GameRepository) ListByParticipant(ctx context.Context, userID int64) ([
 			SELECT 1 FROM game_participants AS membership
 			WHERE membership.game_id = g.id AND membership.user_id = $1
 		  )
-		  AND slot.starts_at > NOW()
+		  AND slot.closed_at IS NULL
+		  AND slot.ends_at > NOW()
 		ORDER BY slot.starts_at, g.id, participant.user_id`
 
 	return scanGames(ctx, r.db, query, userID)
@@ -203,7 +210,8 @@ func (r *GameRepository) SearchAvailable(ctx context.Context, userID int64, filt
 		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
 		JOIN arenas AS arena ON arena.id = slot.arena_id
 		LEFT JOIN game_participants AS participant ON participant.game_id = g.id
-		WHERE slot.starts_at > NOW()
+		WHERE slot.ends_at > NOW()
+		  AND slot.closed_at IS NULL
 		  AND ($2 = '' OR LOWER(BTRIM(arena.city)) = LOWER($2))
 		  AND ($3::timestamptz IS NULL OR slot.starts_at >= $3)
 		  AND ($4::timestamptz IS NULL OR slot.starts_at < $4)
@@ -218,6 +226,8 @@ func (r *GameRepository) SearchAvailable(ctx context.Context, userID int64, filt
 			JOIN arena_time_slots AS current_slot ON current_slot.id = current_game.time_slot_id
 			WHERE current_participant.user_id = $1
 			  AND current_game.id <> g.id
+			  AND current_slot.closed_at IS NULL
+			  AND current_slot.ends_at > NOW()
 			  AND current_slot.starts_at < slot.ends_at
 			  AND current_slot.ends_at > slot.starts_at
 		  )
@@ -286,17 +296,22 @@ func (r *GameRepository) Join(ctx context.Context, gameID, userID int64) (game.G
 	}
 
 	var interval game.TimeSlot
+	var unavailable bool
 	if err := tx.QueryRowContext(ctx, `
-		SELECT slot.id, slot.arena_id, slot.starts_at, slot.ends_at
+		SELECT slot.id, slot.arena_id, slot.starts_at, slot.ends_at,
+		       slot.closed_at IS NOT NULL OR slot.ends_at <= NOW()
 		FROM games AS g
 		JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
 		WHERE g.id = $1
-		FOR UPDATE OF g`, gameID,
-	).Scan(&interval.ID, &interval.ArenaID, &interval.StartsAt, &interval.EndsAt); err != nil {
+		FOR UPDATE OF g, slot`, gameID,
+	).Scan(&interval.ID, &interval.ArenaID, &interval.StartsAt, &interval.EndsAt, &unavailable); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return game.Game{}, game.ErrNotFound
 		}
 		return game.Game{}, fmt.Errorf("lock game for participation: %w", err)
+	}
+	if unavailable {
+		return game.Game{}, game.ErrTimeSlotUnavailable
 	}
 
 	var alreadyParticipating bool
@@ -389,6 +404,8 @@ func userHasOverlappingGame(ctx context.Context, tx *sql.Tx, userID int64, start
 			JOIN arena_time_slots AS slot ON slot.id = g.time_slot_id
 			WHERE participant.user_id = $1
 			  AND g.id <> $4
+			  AND slot.closed_at IS NULL
+			  AND slot.ends_at > NOW()
 			  AND slot.starts_at < $3
 			  AND slot.ends_at > $2
 		)`

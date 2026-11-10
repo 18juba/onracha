@@ -55,6 +55,11 @@ export type TimeSlot = {
 	starts_at: string;
 	ends_at: string;
 	created_at: string;
+	closed_at: string | null;
+};
+
+export type ManagedTimeSlot = TimeSlot & {
+	game_id: number | null;
 };
 
 export type CreateTimeSlotInput = {
@@ -225,6 +230,14 @@ export const api = {
 
 	listArenaTimeSlots(arenaID: number): Promise<TimeSlot[]> {
 		return request(`/api/v1/arenas/${arenaID}/time-slots`);
+	},
+
+	listManagedArenaTimeSlots(arenaID: number): Promise<ManagedTimeSlot[]> {
+		return request(`/api/v1/arenas/${arenaID}/time-slots/manage`);
+	},
+
+	closeArenaTimeSlot(arenaID: number, timeSlotID: number): Promise<TimeSlot> {
+		return request(`/api/v1/arenas/${arenaID}/time-slots/${timeSlotID}/close`, { method: 'PATCH' });
 	},
 
 	listMyGames(): Promise<Game[]> {

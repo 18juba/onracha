@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { LocateFixed, LoaderCircle, Minus, Plus, RefreshCw } from '@lucide/svelte';
 	import { api, type DiscoveredArena } from '../api';
+	import {
+		discoveryRadiusKM,
+		shouldRefreshDiscovery,
+		type DiscoveryCoverage
+	} from '../map-discovery';
 	import type { Theme } from '../theme';
 
 	type Coordinates = { latitude: number; longitude: number };
@@ -21,6 +26,8 @@
 	};
 
 	const CITY_ZOOM = 12.5;
+	const MIN_AUTO_DISCOVERY_ZOOM = 9;
+	const DISCOVERY_DEBOUNCE_MS = 500;
 	const BRAZIL_CENTER: [number, number] = [-14.235, -51.9253];
 	const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
@@ -68,6 +75,7 @@
 		let userMarker: import('leaflet').Marker | undefined;
 		let selectionMarker: import('leaflet').Marker | undefined;
 		let accuracyCircle: import('leaflet').Circle | undefined;
+		let lastDiscoveryCoverage: (DiscoveryCoverage & { center: [number, number] }) | null = null;
 		const arenaMarkers: { id: number; marker: import('leaflet').Marker }[] = [];
 		let availableGameCounts: Record<number, number> = {};
 		let discoveredArenas: DiscoveredArena[] = [];
@@ -229,24 +237,51 @@
 			}
 		}
 
-		function arenaSearchRadiusKM() {
-			if (!map) return 25;
+		function visibleMapRadiusKM() {
+			if (!map) return 0;
 			const center = map.getCenter();
-			const radius = map.distance(center, map.getBounds().getNorthEast()) / 1000;
-			return Math.min(100, Math.max(25, Math.ceil(radius)));
+			const bounds = map.getBounds();
+			const corners = [
+				bounds.getNorthEast(),
+				bounds.getNorthWest(),
+				bounds.getSouthEast(),
+				bounds.getSouthWest()
+			];
+			return Math.max(...corners.map((corner) => map!.distance(center, corner) / 1000));
 		}
 
-		async function loadArenasForCurrentMap() {
+		async function loadArenasForCurrentMap(force = false) {
 			if (!discoverArenas || !map) return;
-			const currentRequest = ++discoveryRequestNumber;
 			const center = map.getCenter();
+			const visibleRadiusKM = visibleMapRadiusKM();
+			const centerMovementKM = lastDiscoveryCoverage
+				? map.distance(lastDiscoveryCoverage.center, center) / 1000
+				: 0;
+			if (
+				!force &&
+				!shouldRefreshDiscovery({
+					centerMovementKM,
+					visibleRadiusKM,
+					previousCoverage: lastDiscoveryCoverage
+				})
+			) {
+				return;
+			}
+
+			const currentRequest = ++discoveryRequestNumber;
+			const radiusKM = discoveryRadiusKM(visibleRadiusKM);
+			lastDiscoveryCoverage = {
+				center: [center.lat, center.lng],
+				radiusKM,
+				visibleRadiusKM
+			};
 			arenaDiscoveryStatus = 'loading';
 
 			try {
 				const arenas = await api.discoverArenas({
 					latitude: center.lat,
 					longitude: center.lng,
-					radius_km: arenaSearchRadiusKM()
+					radius_km: radiusKM
 				});
 				if (disposed || currentRequest !== discoveryRequestNumber) return;
 				discoveredArenas = arenas;
@@ -264,9 +299,9 @@
 		}
 
 		function scheduleArenaSearch() {
-			if (!discoverArenas) return;
+			if (!discoverArenas || !map || map.getZoom() < MIN_AUTO_DISCOVERY_ZOOM) return;
 			if (discoveryTimer) clearTimeout(discoveryTimer);
-			discoveryTimer = setTimeout(() => void loadArenasForCurrentMap(), 350);
+			discoveryTimer = setTimeout(() => void loadArenasForCurrentMap(), DISCOVERY_DEBOUNCE_MS);
 		}
 
 		function showSelectedLocation(location: Coordinates) {
@@ -370,7 +405,7 @@
 		}
 
 		mapControls.requestUserLocation = locateUser;
-		mapControls.searchArenas = () => void loadArenasForCurrentMap();
+		mapControls.searchArenas = () => void loadArenasForCurrentMap(true);
 		mapControls.refreshGameAvailability = () => void loadAvailableGameCounts();
 		mapControls.centerOnUser = () => {
 			if (!userLocation) {

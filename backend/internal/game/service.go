@@ -52,6 +52,44 @@ func (s *Service) ListAvailableTimeSlots(ctx context.Context, arenaID int64) ([]
 	return values, nil
 }
 
+// ListManagedTimeSlots returns every time slot for an arena owned by the user.
+func (s *Service) ListManagedTimeSlots(ctx context.Context, arenaID, ownerUserID int64) ([]ManagedTimeSlot, error) {
+	if arenaID <= 0 {
+		return nil, ErrInvalidArenaID
+	}
+	if ownerUserID <= 0 {
+		return nil, ErrInvalidUserID
+	}
+
+	values, err := s.timeSlots.ListManagedByArena(ctx, arenaID, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("list managed arena time slots: %w", err)
+	}
+	if values == nil {
+		values = []ManagedTimeSlot{}
+	}
+	return values, nil
+}
+
+// CloseTimeSlot prevents further scheduling or participation in an arena time slot.
+func (s *Service) CloseTimeSlot(ctx context.Context, arenaID, timeSlotID, ownerUserID int64) (TimeSlot, error) {
+	if arenaID <= 0 {
+		return TimeSlot{}, ErrInvalidArenaID
+	}
+	if timeSlotID <= 0 {
+		return TimeSlot{}, ErrInvalidTimeSlotID
+	}
+	if ownerUserID <= 0 {
+		return TimeSlot{}, ErrInvalidUserID
+	}
+
+	closed, err := s.timeSlots.Close(ctx, arenaID, timeSlotID, ownerUserID)
+	if err != nil {
+		return TimeSlot{}, fmt.Errorf("close arena time slot: %w", err)
+	}
+	return closed, nil
+}
+
 // Schedule creates a game and automatically registers its organizer as a participant.
 func (s *Service) Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (Game, error) {
 	if timeSlotID <= 0 {

@@ -23,11 +23,18 @@ var (
 
 // TimeSlot is a bookable period configured for an arena.
 type TimeSlot struct {
-	ID        int64     `json:"id"`
-	ArenaID   int64     `json:"arena_id"`
-	StartsAt  time.Time `json:"starts_at"`
-	EndsAt    time.Time `json:"ends_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int64      `json:"id"`
+	ArenaID   int64      `json:"arena_id"`
+	StartsAt  time.Time  `json:"starts_at"`
+	EndsAt    time.Time  `json:"ends_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	ClosedAt  *time.Time `json:"closed_at"`
+}
+
+// ManagedTimeSlot adds the scheduled game reference used by arena owners.
+type ManagedTimeSlot struct {
+	TimeSlot
+	GameID *int64 `json:"game_id"`
 }
 
 // Game is a scheduled use of one arena time slot.

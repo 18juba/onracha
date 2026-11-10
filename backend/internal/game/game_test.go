@@ -139,6 +139,121 @@ func TestServiceListAvailableTimeSlotsReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestServiceListManagedTimeSlotsPassesArenaAndOwner(t *testing.T) {
+	want := []ManagedTimeSlot{{TimeSlot: TimeSlot{ID: 9, ArenaID: 23}}}
+	repository := &fakeTimeSlotRepository{managedSlots: want}
+	service := NewService(repository, &fakeGameRepository{})
+
+	got, err := service.ListManagedTimeSlots(context.Background(), 23, 17)
+	if err != nil {
+		t.Fatalf("ListManagedTimeSlots() error = %v, want nil", err)
+	}
+	if repository.listManagedCalls != 1 || repository.managedArenaID != 23 || repository.managedOwnerID != 17 {
+		t.Errorf("managed list calls=%d arena=%d owner=%d, want one call for arena 23 and owner 17", repository.listManagedCalls, repository.managedArenaID, repository.managedOwnerID)
+	}
+	if len(got) != 1 || got[0].ID != want[0].ID {
+		t.Errorf("ListManagedTimeSlots() = %+v, want %+v", got, want)
+	}
+}
+
+func TestServiceListManagedTimeSlotsReturnsEmptySlice(t *testing.T) {
+	service := NewService(&fakeTimeSlotRepository{}, &fakeGameRepository{})
+
+	got, err := service.ListManagedTimeSlots(context.Background(), 23, 17)
+	if err != nil {
+		t.Fatalf("ListManagedTimeSlots() error = %v, want nil", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("ListManagedTimeSlots() = %+v, want non-nil empty slice", got)
+	}
+}
+
+func TestServiceListManagedTimeSlotsReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeTimeSlotRepository{managedListError: wantErr}, &fakeGameRepository{})
+
+	if _, err := service.ListManagedTimeSlots(context.Background(), 23, 17); !errors.Is(err, wantErr) {
+		t.Fatalf("ListManagedTimeSlots() error = %v, want wrapped error %v", err, wantErr)
+	}
+}
+
+func TestServiceListManagedTimeSlotsRejectsInvalidIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		arenaID int64
+		ownerID int64
+		want    error
+	}{
+		{name: "arena", ownerID: 17, want: ErrInvalidArenaID},
+		{name: "owner", arenaID: 23, want: ErrInvalidUserID},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeTimeSlotRepository{}
+			service := NewService(repository, &fakeGameRepository{})
+			if _, err := service.ListManagedTimeSlots(context.Background(), test.arenaID, test.ownerID); !errors.Is(err, test.want) {
+				t.Fatalf("ListManagedTimeSlots() error = %v, want %v", err, test.want)
+			}
+			if repository.listManagedCalls != 0 {
+				t.Errorf("repository calls = %d, want 0", repository.listManagedCalls)
+			}
+		})
+	}
+}
+
+func TestServiceCloseTimeSlotPassesOwnerAndIDs(t *testing.T) {
+	closedAt := time.Date(2026, time.December, 12, 18, 0, 0, 0, time.UTC)
+	want := TimeSlot{ID: 9, ArenaID: 23, ClosedAt: &closedAt}
+	repository := &fakeTimeSlotRepository{closedSlot: want}
+	service := NewService(repository, &fakeGameRepository{})
+
+	got, err := service.CloseTimeSlot(context.Background(), 23, 9, 17)
+	if err != nil {
+		t.Fatalf("CloseTimeSlot() error = %v, want nil", err)
+	}
+	if repository.closeCalls != 1 || repository.closeArenaID != 23 || repository.closeSlotID != 9 || repository.closeOwnerID != 17 {
+		t.Errorf("close calls=%d arena=%d slot=%d owner=%d, want one call with IDs 23, 9, and 17", repository.closeCalls, repository.closeArenaID, repository.closeSlotID, repository.closeOwnerID)
+	}
+	if got.ID != want.ID || got.ClosedAt == nil || !got.ClosedAt.Equal(closedAt) {
+		t.Errorf("CloseTimeSlot() = %+v, want %+v", got, want)
+	}
+}
+
+func TestServiceCloseTimeSlotRejectsInvalidIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		arenaID int64
+		slotID  int64
+		ownerID int64
+		want    error
+	}{
+		{name: "arena", slotID: 9, ownerID: 17, want: ErrInvalidArenaID},
+		{name: "slot", arenaID: 23, ownerID: 17, want: ErrInvalidTimeSlotID},
+		{name: "owner", arenaID: 23, slotID: 9, want: ErrInvalidUserID},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeTimeSlotRepository{}
+			service := NewService(repository, &fakeGameRepository{})
+			if _, err := service.CloseTimeSlot(context.Background(), test.arenaID, test.slotID, test.ownerID); !errors.Is(err, test.want) {
+				t.Fatalf("CloseTimeSlot() error = %v, want %v", err, test.want)
+			}
+			if repository.closeCalls != 0 {
+				t.Errorf("repository calls = %d, want 0", repository.closeCalls)
+			}
+		})
+	}
+}
+
+func TestServiceCloseTimeSlotReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeTimeSlotRepository{closeError: wantErr}, &fakeGameRepository{})
+
+	if _, err := service.CloseTimeSlot(context.Background(), 23, 9, 17); !errors.Is(err, wantErr) {
+		t.Fatalf("CloseTimeSlot() error = %v, want wrapped error %v", err, wantErr)
+	}
+}
+
 func TestServiceSchedulePassesSlotAndOrganizer(t *testing.T) {
 	want := Game{ID: 31, TimeSlotID: 9, OrganizerUserID: 17}
 	repository := &fakeGameRepository{scheduledGame: want}
@@ -519,15 +634,26 @@ func TestServiceSearchAvailableReturnsRepositoryError(t *testing.T) {
 }
 
 type fakeTimeSlotRepository struct {
-	createdSlot   TimeSlot
-	created       TimeSlot
-	ownerID       int64
-	createCalls   int
-	createError   error
-	listCalls     int
-	listedArenaID int64
-	listedSlots   []TimeSlot
-	listError     error
+	createdSlot      TimeSlot
+	created          TimeSlot
+	ownerID          int64
+	createCalls      int
+	createError      error
+	listCalls        int
+	listedArenaID    int64
+	listedSlots      []TimeSlot
+	listError        error
+	managedSlots     []ManagedTimeSlot
+	listManagedCalls int
+	managedArenaID   int64
+	managedOwnerID   int64
+	managedListError error
+	closedSlot       TimeSlot
+	closeCalls       int
+	closeArenaID     int64
+	closeSlotID      int64
+	closeOwnerID     int64
+	closeError       error
 }
 
 func (r *fakeTimeSlotRepository) Create(_ context.Context, ownerUserID int64, value TimeSlot) (TimeSlot, error) {
@@ -544,6 +670,21 @@ func (r *fakeTimeSlotRepository) ListAvailableByArena(_ context.Context, arenaID
 	r.listCalls++
 	r.listedArenaID = arenaID
 	return r.listedSlots, r.listError
+}
+
+func (r *fakeTimeSlotRepository) ListManagedByArena(_ context.Context, arenaID, ownerUserID int64) ([]ManagedTimeSlot, error) {
+	r.listManagedCalls++
+	r.managedArenaID = arenaID
+	r.managedOwnerID = ownerUserID
+	return r.managedSlots, r.managedListError
+}
+
+func (r *fakeTimeSlotRepository) Close(_ context.Context, arenaID, timeSlotID, ownerUserID int64) (TimeSlot, error) {
+	r.closeCalls++
+	r.closeArenaID = arenaID
+	r.closeSlotID = timeSlotID
+	r.closeOwnerID = ownerUserID
+	return r.closedSlot, r.closeError
 }
 
 type fakeGameRepository struct {

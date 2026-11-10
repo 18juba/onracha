@@ -221,6 +221,7 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	if nextDayGameResponse.Code != http.StatusCreated {
 		t.Fatalf("schedule next-day game status = %d, want %d; body: %s", nextDayGameResponse.Code, http.StatusCreated, nextDayGameResponse.Body.String())
 	}
+	freeSlot := createSlot(arenas[0].ID, startsAt.Add(4*time.Hour), endsAt.Add(4*time.Hour))
 
 	join := func(gameID int64, session *auth.Session) (*httptest.ResponseRecorder, game.Game) {
 		t.Helper()
@@ -451,6 +452,139 @@ func TestGameSchedulingEnforcesArenaAndUserTimeRules(t *testing.T) {
 	}
 	if len(updatedMyGames) != 1 || updatedMyGames[0].ID != secondGame.ID {
 		t.Errorf("my games after leaving = %+v, want only game %d", updatedMyGames, secondGame.ID)
+	}
+
+	pastStartsAt := time.Now().UTC().Add(-2 * time.Hour)
+	pastEndsAt := time.Now().UTC().Add(-time.Hour)
+	if _, err := database.ExecContext(ctx,
+		"UPDATE arena_time_slots SET starts_at = $1, ends_at = $2 WHERE id = $3", pastStartsAt, pastEndsAt, secondSlot.ID,
+	); err != nil {
+		t.Fatalf("mark second game as past: %v", err)
+	}
+	ongoingStartsAt := time.Now().UTC().Add(-30 * time.Minute)
+	ongoingEndsAt := time.Now().UTC().Add(30 * time.Minute)
+	if _, err := database.ExecContext(ctx,
+		"UPDATE arena_time_slots SET starts_at = $1, ends_at = $2 WHERE id = $3", ongoingStartsAt, ongoingEndsAt, nextDaySlot.ID,
+	); err != nil {
+		t.Fatalf("mark next-day game as ongoing: %v", err)
+	}
+
+	availableGamesDuringOngoing := request(http.MethodGet, "/api/v1/games", nil, playerSession)
+	var gamesDuringOngoing []gameSearchResult
+	if availableGamesDuringOngoing.Code != http.StatusOK {
+		t.Fatalf("search games during an ongoing game status = %d, want %d", availableGamesDuringOngoing.Code, http.StatusOK)
+	}
+	if err := json.Unmarshal(availableGamesDuringOngoing.Body.Bytes(), &gamesDuringOngoing); err != nil {
+		t.Fatalf("decode games during an ongoing game: %v", err)
+	}
+	foundOngoingGame := false
+	for _, result := range gamesDuringOngoing {
+		if result.Game.ID == nextDayGame.ID {
+			foundOngoingGame = true
+		}
+		if result.Game.ID == secondGame.ID {
+			t.Errorf("past game %d remains in available games", secondGame.ID)
+		}
+	}
+	if !foundOngoingGame {
+		t.Errorf("available games during an ongoing game = %+v, want ongoing game %d", gamesDuringOngoing, nextDayGame.ID)
+	}
+
+	organizerGamesResponse := request(http.MethodGet, "/api/v1/me/games", nil, organizerSession)
+	var organizerGames []game.Game
+	if organizerGamesResponse.Code != http.StatusOK {
+		t.Fatalf("list organizer games after one ended status = %d, want %d", organizerGamesResponse.Code, http.StatusOK)
+	}
+	if err := json.Unmarshal(organizerGamesResponse.Body.Bytes(), &organizerGames); err != nil {
+		t.Fatalf("decode organizer games: %v", err)
+	}
+	if len(organizerGames) != 1 || organizerGames[0].ID != firstGame.ID {
+		t.Errorf("organizer games after one ended = %+v, want the still-upcoming game %d only", organizerGames, firstGame.ID)
+	}
+
+	managedSlotsPath := fmt.Sprintf("/api/v1/arenas/%d/time-slots/manage", arenas[0].ID)
+	managedSlotsResponse := request(http.MethodGet, managedSlotsPath, nil, ownerSession)
+	var managedSlots []game.ManagedTimeSlot
+	if managedSlotsResponse.Code != http.StatusOK {
+		t.Fatalf("list managed time slots status = %d, want %d; body: %s", managedSlotsResponse.Code, http.StatusOK, managedSlotsResponse.Body.String())
+	}
+	if err := json.Unmarshal(managedSlotsResponse.Body.Bytes(), &managedSlots); err != nil {
+		t.Fatalf("decode managed time slots: %v", err)
+	}
+	if len(managedSlots) != 4 {
+		t.Errorf("managed time slots = %d, want all 4 slots including free and scheduled slots", len(managedSlots))
+	}
+	nonOwnerManagedSlots := request(http.MethodGet, managedSlotsPath, nil, organizerSession)
+	if nonOwnerManagedSlots.Code != http.StatusNotFound {
+		t.Errorf("non-owner managed slot listing status = %d, want %d", nonOwnerManagedSlots.Code, http.StatusNotFound)
+	}
+
+	closeFreeSlotPath := fmt.Sprintf("/api/v1/arenas/%d/time-slots/%d/close", arenas[0].ID, freeSlot.ID)
+	nonOwnerClose := request(http.MethodPatch, closeFreeSlotPath, nil, organizerSession)
+	if nonOwnerClose.Code != http.StatusNotFound {
+		t.Errorf("non-owner time slot close status = %d, want %d", nonOwnerClose.Code, http.StatusNotFound)
+	}
+	closedFreeSlotResponse := request(http.MethodPatch, closeFreeSlotPath, nil, ownerSession)
+	var closedFreeSlot game.TimeSlot
+	if closedFreeSlotResponse.Code != http.StatusOK {
+		t.Fatalf("close available time slot status = %d, want %d; body: %s", closedFreeSlotResponse.Code, http.StatusOK, closedFreeSlotResponse.Body.String())
+	}
+	if err := json.Unmarshal(closedFreeSlotResponse.Body.Bytes(), &closedFreeSlot); err != nil {
+		t.Fatalf("decode closed available time slot: %v", err)
+	}
+	if closedFreeSlot.ClosedAt == nil {
+		t.Fatal("closed available time slot has no closed_at timestamp")
+	}
+	availableSlotsAfterClose := request(http.MethodGet, fmt.Sprintf("/api/v1/arenas/%d/time-slots", arenas[0].ID), nil, organizerSession)
+	var openSlots []game.TimeSlot
+	if err := json.Unmarshal(availableSlotsAfterClose.Body.Bytes(), &openSlots); err != nil {
+		t.Fatalf("decode available time slots after close: %v", err)
+	}
+	for _, slot := range openSlots {
+		if slot.ID == freeSlot.ID {
+			t.Errorf("closed time slot %d remains available for players", freeSlot.ID)
+		}
+	}
+	closedSlotSchedule := request(http.MethodPost, fmt.Sprintf("/api/v1/time-slots/%d/games", freeSlot.ID), nil, organizerSession)
+	if closedSlotSchedule.Code != http.StatusConflict {
+		t.Errorf("schedule closed time slot status = %d, want %d", closedSlotSchedule.Code, http.StatusConflict)
+	}
+	closedAgainResponse := request(http.MethodPatch, closeFreeSlotPath, nil, ownerSession)
+	if closedAgainResponse.Code != http.StatusOK {
+		t.Errorf("closing an already closed time slot status = %d, want %d", closedAgainResponse.Code, http.StatusOK)
+	}
+
+	closePastSlotPath := fmt.Sprintf("/api/v1/arenas/%d/time-slots/%d/close", arenas[0].ID, secondSlot.ID)
+	closedPastSlot := request(http.MethodPatch, closePastSlotPath, nil, ownerSession)
+	if closedPastSlot.Code != http.StatusOK {
+		t.Errorf("close past game time slot status = %d, want %d; body: %s", closedPastSlot.Code, http.StatusOK, closedPastSlot.Body.String())
+	}
+
+	closeOngoingSlotPath := fmt.Sprintf("/api/v1/arenas/%d/time-slots/%d/close", arenas[0].ID, nextDaySlot.ID)
+	closedOngoingSlot := request(http.MethodPatch, closeOngoingSlotPath, nil, ownerSession)
+	if closedOngoingSlot.Code != http.StatusOK {
+		t.Errorf("close ongoing game time slot status = %d, want %d; body: %s", closedOngoingSlot.Code, http.StatusOK, closedOngoingSlot.Body.String())
+	}
+
+	gamesAfterClosing := request(http.MethodGet, "/api/v1/games", nil, playerSession)
+	var gamesAfterClosingValues []gameSearchResult
+	if err := json.Unmarshal(gamesAfterClosing.Body.Bytes(), &gamesAfterClosingValues); err != nil {
+		t.Fatalf("decode games after closing an ongoing game: %v", err)
+	}
+	for _, result := range gamesAfterClosingValues {
+		if result.Game.ID == nextDayGame.ID || result.Game.ID == secondGame.ID {
+			t.Errorf("closed or past game %d remains in available game search", result.Game.ID)
+		}
+	}
+	myGamesAfterClosing := request(http.MethodGet, "/api/v1/me/games", nil, secondOrganizerSession)
+	var secondOrganizerGames []game.Game
+	if err := json.Unmarshal(myGamesAfterClosing.Body.Bytes(), &secondOrganizerGames); err != nil {
+		t.Fatalf("decode organizer games after closing an ongoing game: %v", err)
+	}
+	for _, value := range secondOrganizerGames {
+		if value.ID == nextDayGame.ID {
+			t.Errorf("closed ongoing game %d remains in the organizer's games", nextDayGame.ID)
+		}
 	}
 
 	missingLeaveResponse := request(http.MethodDelete, "/api/v1/games/9223372036854775807/participants/me", nil, playerSession)

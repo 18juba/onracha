@@ -64,6 +64,34 @@ describe('API client', () => {
 		);
 	});
 
+	it('lists managed arena slots and closes a selected slot', async () => {
+		const closedSlot = {
+			id: 9,
+			arena_id: 23,
+			starts_at: '2026-12-12T19:00:00Z',
+			ends_at: '2026-12-12T20:00:00Z',
+			created_at: '2026-11-08T12:00:00Z',
+			closed_at: '2026-11-10T12:00:00Z'
+		};
+		fetchMock
+			.mockResolvedValueOnce(response(200, [{ ...closedSlot, game_id: null }]))
+			.mockResolvedValueOnce(response(200, closedSlot));
+
+		await api.listManagedArenaTimeSlots(23);
+		await api.closeArenaTimeSlot(23, 9);
+
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			expect.stringMatching(/\/api\/v1\/arenas\/23\/time-slots\/manage$/),
+			expect.objectContaining({ credentials: 'include' })
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			expect.stringMatching(/\/api\/v1\/arenas\/23\/time-slots\/9\/close$/),
+			expect.objectContaining({ method: 'PATCH', credentials: 'include' })
+		);
+	});
+
 	it('exposes API errors with their HTTP status and message', async () => {
 		fetchMock.mockResolvedValue(
 			response(401, {

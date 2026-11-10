@@ -43,6 +43,8 @@ type ArenaService interface {
 type GameService interface {
 	CreateTimeSlot(ctx context.Context, arenaID, ownerUserID int64, startsAt, endsAt time.Time) (game.TimeSlot, error)
 	ListAvailableTimeSlots(ctx context.Context, arenaID int64) ([]game.TimeSlot, error)
+	ListManagedTimeSlots(ctx context.Context, arenaID, ownerUserID int64) ([]game.ManagedTimeSlot, error)
+	CloseTimeSlot(ctx context.Context, arenaID, timeSlotID, ownerUserID int64) (game.TimeSlot, error)
 	Schedule(ctx context.Context, timeSlotID, organizerUserID int64) (game.Game, error)
 	ListByArena(ctx context.Context, arenaID int64) ([]game.Game, error)
 	ListByParticipant(ctx context.Context, userID int64) ([]game.Game, error)
@@ -97,6 +99,8 @@ func NewRouter(authService AuthService, arenaService ArenaService, gameService G
 	mux.HandleFunc("POST /api/v1/arenas", api.createArena)
 	mux.HandleFunc("POST /api/v1/arenas/{id}/time-slots", api.createTimeSlot)
 	mux.HandleFunc("GET /api/v1/arenas/{id}/time-slots", api.listAvailableTimeSlots)
+	mux.HandleFunc("GET /api/v1/arenas/{id}/time-slots/manage", api.listManagedTimeSlots)
+	mux.HandleFunc("PATCH /api/v1/arenas/{arenaID}/time-slots/{slotID}/close", api.closeTimeSlot)
 	mux.HandleFunc("GET /api/v1/arenas/{id}/games", api.listGamesByArena)
 	mux.HandleFunc("GET /api/v1/me/games", api.listMyGames)
 	mux.HandleFunc("GET /api/v1/games", api.searchGames)
@@ -504,6 +508,51 @@ func (h *handler) listAvailableTimeSlots(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, values)
+}
+
+func (h *handler) listManagedTimeSlots(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, validID := parsePositiveID(r.PathValue("id"))
+	if !validID {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+
+	values, err := h.gameService.ListManagedTimeSlots(r.Context(), arenaID, user.ID)
+	if err != nil {
+		h.writeGameError(w, err, "managed arena time slot listing failed", "Não foi possível consultar os horários da arena.")
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
+}
+
+func (h *handler) closeTimeSlot(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	arenaID, validArenaID := parsePositiveID(r.PathValue("arenaID"))
+	if !validArenaID {
+		writeError(w, http.StatusBadRequest, "invalid_arena_id", "O identificador da arena é inválido.")
+		return
+	}
+	timeSlotID, validTimeSlotID := parsePositiveID(r.PathValue("slotID"))
+	if !validTimeSlotID {
+		writeError(w, http.StatusBadRequest, "invalid_time_slot_id", "O identificador do horário é inválido.")
+		return
+	}
+
+	closed, err := h.gameService.CloseTimeSlot(r.Context(), arenaID, timeSlotID, user.ID)
+	if err != nil {
+		h.writeGameError(w, err, "arena time slot close failed", "Não foi possível encerrar o horário.")
+		return
+	}
+	writeJSON(w, http.StatusOK, closed)
 }
 
 func (h *handler) scheduleGame(w http.ResponseWriter, r *http.Request) {

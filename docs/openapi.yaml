@@ -673,6 +673,107 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/arenas/{id}/time-slots/manage:
+    get:
+      summary: Lista todos os horários para o dono da arena
+      description: Inclui horários disponíveis, agendados, em andamento, passados e encerrados.
+      operationId: listManagedArenaTimeSlots
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Horários da arena com o jogo relacionado, quando houver
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ManagedTimeSlot'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Arena inexistente ou pertencente a outra conta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/arenas/{arenaId}/time-slots/{slotId}/close:
+    patch:
+      summary: Encerra um horário da arena
+      description: O dono pode encerrar horários disponíveis, agendados, em andamento ou passados. A operação é idempotente.
+      operationId: closeArenaTimeSlot
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: arenaId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Horário encerrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeSlot'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão ausente, inválida ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Horário inexistente ou arena pertencente a outra conta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/arenas/{id}/games:
     get:
       summary: Lista os jogos agendados em uma arena
@@ -689,7 +790,7 @@ paths:
             minimum: 1
       responses:
         '200':
-          description: Jogos em ordem cronológica, incluindo os IDs dos participantes
+          description: Jogos futuros ou em andamento, incluindo os IDs dos participantes
           content:
             application/json:
               schema:
@@ -716,14 +817,14 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/me/games:
     get:
-      summary: Lista os próximos jogos da conta autenticada
-      description: Retorna os jogos futuros em que a conta participa, incluindo os jogos que organizou, em ordem cronológica.
+      summary: Lista os jogos futuros ou em andamento da conta autenticada
+      description: Retorna jogos em que a conta participa, incluindo os que organizou, enquanto o horário não terminou nem foi encerrado.
       operationId: listMyGames
       security:
         - cookieAuth: []
       responses:
         '200':
-          description: Jogos futuros da conta autenticada
+          description: Jogos futuros ou em andamento da conta autenticada
           content:
             application/json:
               schema:
@@ -796,8 +897,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/games:
     get:
-      summary: Busca jogos futuros disponíveis para a conta autenticada
-      description: Retorna jogos nos quais a conta ainda não participa e que não conflitam com seus outros jogos. A data é filtrada pelo dia UTC.
+      summary: Busca jogos futuros ou em andamento disponíveis para a conta autenticada
+      description: Retorna jogos ainda não encerrados em que a conta não participa e que não conflitam com seus outros jogos. Jogos cujo horário terminou não aparecem. A data é filtrada pelo dia UTC de início.
       operationId: searchAvailableGames
       security:
         - cookieAuth: []
@@ -1133,7 +1234,7 @@ components:
           format: date-time
     TimeSlot:
       type: object
-      required: [id, arena_id, starts_at, ends_at, created_at]
+      required: [id, arena_id, starts_at, ends_at, created_at, closed_at]
       properties:
         id:
           type: integer
@@ -1150,6 +1251,20 @@ components:
         created_at:
           type: string
           format: date-time
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+    ManagedTimeSlot:
+      allOf:
+        - $ref: '#/components/schemas/TimeSlot'
+        - type: object
+          required: [game_id]
+          properties:
+            game_id:
+              type: integer
+              format: int64
+              nullable: true
     Game:
       type: object
       required: [id, time_slot_id, arena_id, organizer_user_id, starts_at, ends_at, participant_user_ids, created_at]

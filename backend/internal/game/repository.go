@@ -8,6 +8,8 @@ import (
 type TimeSlotRepository interface {
 	Create(ctx context.Context, ownerUserID int64, value TimeSlot) (TimeSlot, error)
 	ListAvailableByArena(ctx context.Context, arenaID int64) ([]TimeSlot, error)
+	ListManagedByArena(ctx context.Context, arenaID, ownerUserID int64) ([]ManagedTimeSlot, error)
+	Close(ctx context.Context, arenaID, timeSlotID, ownerUserID int64) (TimeSlot, error)
 }
 
 // GameRepository schedules games and manages their participants.

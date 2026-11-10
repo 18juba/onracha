@@ -9,7 +9,7 @@
 		LoaderCircle,
 		Pencil
 	} from '@lucide/svelte';
-	import { api, type Arena, type TimeSlot } from '../api';
+	import { api, type Arena, type ManagedTimeSlot } from '../api';
 	import { getUserFacingErrorMessage } from '../errors';
 
 	type Props = {
@@ -20,9 +20,10 @@
 	};
 
 	let { arena, onBack, onEdit, onArenaUpdated }: Props = $props();
-	let slots = $state<TimeSlot[]>([]);
+	let slots = $state<ManagedTimeSlot[]>([]);
 	let isLoading = $state(true);
 	let isSavingSlot = $state(false);
+	let closingSlotID = $state<number | null>(null);
 	let isUpdatingActive = $state(false);
 	let today = $state('');
 	let slotDate = $state('');
@@ -31,6 +32,7 @@
 	let loadError = $state('');
 	let formError = $state('');
 	let activeError = $state('');
+	let slotActionError = $state('');
 	let successMessage = $state('');
 
 	onMount(() => {
@@ -48,12 +50,21 @@
 		return `${year}-${month}-${day}`;
 	}
 
+	function sortManagedSlots(values: ManagedTimeSlot[]) {
+		return [...values].sort((first, second) => {
+			const firstEnded = Date.parse(first.ends_at) <= Date.now();
+			const secondEnded = Date.parse(second.ends_at) <= Date.now();
+			if (firstEnded !== secondEnded) return Number(firstEnded) - Number(secondEnded);
+			return Date.parse(first.starts_at) - Date.parse(second.starts_at);
+		});
+	}
+
 	async function loadSlots() {
 		isLoading = true;
 		loadError = '';
 
 		try {
-			slots = await api.listArenaTimeSlots(arena.id);
+			slots = sortManagedSlots(await api.listManagedArenaTimeSlots(arena.id));
 		} catch (error) {
 			loadError = getUserFacingErrorMessage(error, 'Não foi possível carregar os horários.');
 		} finally {
@@ -87,9 +98,7 @@
 				starts_at: startsAt.toISOString(),
 				ends_at: endsAt.toISOString()
 			});
-			slots = [...slots, createdSlot].sort(
-				(first, second) => Date.parse(first.starts_at) - Date.parse(second.starts_at)
-			);
+			slots = sortManagedSlots([...slots, { ...createdSlot, game_id: null }]);
 			successMessage = 'Horário liberado para novos jogos.';
 			startTime = '';
 			endTime = '';
@@ -117,6 +126,36 @@
 		} finally {
 			isUpdatingActive = false;
 		}
+	}
+
+	async function closeTimeSlot(slot: ManagedTimeSlot) {
+		if (slot.closed_at || closingSlotID !== null) return;
+		const confirmed = window.confirm(
+			'Encerrar este horário? Ele deixará de aparecer para os jogadores e ninguém poderá agendar ou entrar nele.'
+		);
+		if (!confirmed) return;
+
+		slotActionError = '';
+		closingSlotID = slot.id;
+		try {
+			const closedSlot = await api.closeArenaTimeSlot(arena.id, slot.id);
+			slots = slots.map((current) =>
+				current.id === slot.id ? { ...current, ...closedSlot } : current
+			);
+		} catch (error) {
+			slotActionError = getUserFacingErrorMessage(error, 'Não foi possível encerrar esse horário.');
+		} finally {
+			closingSlotID = null;
+		}
+	}
+
+	function timeSlotStatus(slot: ManagedTimeSlot) {
+		if (slot.closed_at) return 'Encerrado';
+		const startsAt = Date.parse(slot.starts_at);
+		const endsAt = Date.parse(slot.ends_at);
+		if (endsAt <= Date.now()) return 'Passado';
+		if (startsAt <= Date.now()) return 'Em andamento';
+		return slot.game_id ? 'Jogo agendado' : 'Disponível';
 	}
 
 	function formatDate(value: string) {
@@ -255,11 +294,16 @@
 
 		<section class="grid gap-3" aria-labelledby="available-slots-title">
 			<div class="flex items-center justify-between gap-3">
-				<h2 id="available-slots-title" class="text-lg font-semibold">Disponíveis para jogos</h2>
+				<h2 id="available-slots-title" class="text-lg font-semibold">Horários cadastrados</h2>
 				{#if !isLoading && slots.length > 0}
 					<span class="text-xs text-[var(--text-secondary)]">{slots.length}</span>
 				{/if}
 			</div>
+			{#if slotActionError}
+				<p class="rounded-2xl bg-[var(--surface)] px-4 py-3 text-sm" role="alert">
+					{slotActionError}
+				</p>
+			{/if}
 
 			{#if loadError}
 				<div class="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4" role="alert">
@@ -296,9 +340,9 @@
 					>
 						<Clock3 size={23} aria-hidden="true" />
 					</div>
-					<p class="font-semibold">Nenhum horário liberado</p>
+					<p class="font-semibold">Nenhum horário cadastrado</p>
 					<p class="max-w-xs text-sm text-[var(--text-secondary)]">
-						Adicione uma data e um período para receber novos jogos.
+						Adicione uma data e um período para liberar sua arena para jogos.
 					</p>
 				</div>
 			{:else}
@@ -307,13 +351,35 @@
 						<article
 							class="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
 						>
-							<div class="grid gap-1">
+							<div class="grid min-w-0 gap-1">
 								<h3 class="font-semibold capitalize">{formatDate(slot.starts_at)}</h3>
 								<p class="text-sm text-[var(--text-secondary)]">
 									{formatTime(slot.starts_at)} – {formatTime(slot.ends_at)}
 								</p>
+								<p class="text-xs text-[var(--text-secondary)]">{timeSlotStatus(slot)}</p>
 							</div>
-							<Clock3 size={19} class="shrink-0 text-[var(--accent)]" aria-hidden="true" />
+							{#if slot.closed_at}
+								<Check size={17} class="shrink-0 text-[var(--accent)]" aria-hidden="true" />
+							{:else}
+								<button
+									class="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-[var(--danger)] transition-colors hover:bg-[var(--app-background)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-50"
+									type="button"
+									disabled={closingSlotID !== null}
+									aria-label={`Encerrar horário de ${formatDate(slot.starts_at)} das ${formatTime(slot.starts_at)} às ${formatTime(slot.ends_at)}`}
+									onclick={() => closeTimeSlot(slot)}
+								>
+									{#if closingSlotID === slot.id}
+										<LoaderCircle
+											size={15}
+											class="animate-spin motion-reduce:animate-none"
+											aria-hidden="true"
+										/>
+									{:else}
+										<Clock3 size={15} aria-hidden="true" />
+									{/if}
+									<span>Encerrar</span>
+								</button>
+							{/if}
 						</article>
 					{/each}
 				</div>

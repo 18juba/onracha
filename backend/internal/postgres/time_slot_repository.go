@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"onracha/internal/game"
 )
@@ -69,6 +70,7 @@ func (r *TimeSlotRepository) ListAvailableByArena(ctx context.Context, arenaID i
 		SELECT slot.id, slot.arena_id, slot.starts_at, slot.ends_at, slot.created_at
 		FROM arena_time_slots AS slot
 		WHERE slot.arena_id = $1
+		  AND slot.closed_at IS NULL
 		  AND slot.starts_at > NOW()
 		  AND NOT EXISTS (
 			SELECT 1 FROM games WHERE games.time_slot_id = slot.id
@@ -93,4 +95,90 @@ func (r *TimeSlotRepository) ListAvailableByArena(ctx context.Context, arenaID i
 		return nil, fmt.Errorf("iterate available time slots: %w", err)
 	}
 	return values, nil
+}
+
+// ListManagedByArena returns all time slots when the user owns the arena.
+func (r *TimeSlotRepository) ListManagedByArena(ctx context.Context, arenaID, ownerUserID int64) ([]game.ManagedTimeSlot, error) {
+	var ownsArena bool
+	if err := r.db.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM arenas WHERE id = $1 AND owner_user_id = $2)", arenaID, ownerUserID,
+	).Scan(&ownsArena); err != nil {
+		return nil, fmt.Errorf("check arena ownership for managed time slots: %w", err)
+	}
+	if !ownsArena {
+		return nil, game.ErrNotFound
+	}
+
+	const query = `
+		SELECT slot.id, slot.arena_id, slot.starts_at, slot.ends_at, slot.created_at, slot.closed_at, games.id
+		FROM arena_time_slots AS slot
+		LEFT JOIN games ON games.time_slot_id = slot.id
+		WHERE slot.arena_id = $1
+		ORDER BY (slot.ends_at <= NOW()), slot.starts_at, slot.id`
+
+	rows, err := r.db.QueryContext(ctx, query, arenaID)
+	if err != nil {
+		return nil, fmt.Errorf("query managed arena time slots: %w", err)
+	}
+	defer rows.Close()
+
+	values := make([]game.ManagedTimeSlot, 0)
+	for rows.Next() {
+		var value game.ManagedTimeSlot
+		var closedAt sql.NullTime
+		var gameID sql.NullInt64
+		if err := rows.Scan(
+			&value.ID,
+			&value.ArenaID,
+			&value.StartsAt,
+			&value.EndsAt,
+			&value.CreatedAt,
+			&closedAt,
+			&gameID,
+		); err != nil {
+			return nil, fmt.Errorf("scan managed arena time slot: %w", err)
+		}
+		if closedAt.Valid {
+			value.ClosedAt = &closedAt.Time
+		}
+		if gameID.Valid {
+			value.GameID = &gameID.Int64
+		}
+		values = append(values, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate managed arena time slots: %w", err)
+	}
+	return values, nil
+}
+
+// Close marks a time slot as closed for its arena owner. Repeating the request is safe.
+func (r *TimeSlotRepository) Close(ctx context.Context, arenaID, timeSlotID, ownerUserID int64) (game.TimeSlot, error) {
+	const query = `
+		UPDATE arena_time_slots AS slot
+		SET closed_at = COALESCE(slot.closed_at, NOW())
+		FROM arenas AS arena
+		WHERE slot.id = $1
+		  AND slot.arena_id = $2
+		  AND arena.id = slot.arena_id
+		  AND arena.owner_user_id = $3
+		RETURNING slot.id, slot.arena_id, slot.starts_at, slot.ends_at, slot.created_at, slot.closed_at`
+
+	var value game.TimeSlot
+	var closedAt time.Time
+	if err := r.db.QueryRowContext(ctx, query, timeSlotID, arenaID, ownerUserID).Scan(
+		&value.ID,
+		&value.ArenaID,
+		&value.StartsAt,
+		&value.EndsAt,
+		&value.CreatedAt,
+		&closedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return game.TimeSlot{}, game.ErrNotFound
+		}
+		return game.TimeSlot{}, fmt.Errorf("close arena time slot: %w", err)
+	}
+	value.ClosedAt = &closedAt
+	return value, nil
 }
