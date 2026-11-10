@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { fly } from 'svelte/transition';
 	import {
@@ -49,6 +49,11 @@
 		errorMessage = '';
 	}
 
+	async function focusInput(id: string) {
+		await tick();
+		document.getElementById(id)?.focus({ preventScroll: true });
+	}
+
 	function startFlow(hasAccount: boolean) {
 		email = '';
 		name = '';
@@ -59,6 +64,7 @@
 		showPassword = false;
 		showPasswordConfirmation = false;
 		moveTo(getChoiceScreen(hasAccount));
+		void focusInput(hasAccount ? 'login-email' : 'register-name');
 	}
 
 	function goBack() {
@@ -75,6 +81,7 @@
 		email = email.trim();
 		noticeMessage = '';
 		moveTo('password');
+		void focusInput('login-password');
 	}
 
 	async function submitLogin(event: SubmitEvent) {
