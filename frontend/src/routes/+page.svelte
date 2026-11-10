@@ -228,53 +228,6 @@
 				>
 					{#if screen === 'welcome'}
 						<div class="flex flex-1 flex-col items-center justify-center">
-							<div class="h-[230px] w-full max-w-[320px]" aria-hidden="true">
-								<svg viewBox="0 0 320 250" class="h-full w-full">
-									<ellipse
-										cx="160"
-										cy="125"
-										rx="129"
-										ry="47"
-										transform="rotate(-22 160 125)"
-										class="origin-center animate-[spin_24s_linear_infinite] fill-none stroke-[var(--accent)] opacity-30 motion-reduce:animate-none"
-									/>
-									<ellipse
-										cx="160"
-										cy="125"
-										rx="105"
-										ry="69"
-										transform="rotate(36 160 125)"
-										class="fill-none stroke-[var(--text-secondary)] opacity-15"
-									/>
-									<circle cx="160" cy="125" r="64" class="fill-[var(--accent)] opacity-[0.07]" />
-									<g
-										class="origin-center animate-[spin_28s_linear_infinite] motion-reduce:animate-none"
-									>
-										<circle
-											cx="160"
-											cy="121"
-											r="48"
-											class="fill-[var(--surface-raised)] stroke-[var(--accent)] stroke-[1.5]"
-										/>
-										<path
-											d="M160 99 179 113 172 135 148 135 141 113Z"
-											class="fill-[var(--accent)] opacity-70"
-										/>
-										<path
-											d="m160 99 1-25m18 39 24-8m-31 30 15 19m-39-19-15 19m-7-41-24-8"
-											class="fill-none stroke-[var(--text-secondary)] stroke-[1.5] opacity-45"
-										/>
-									</g>
-									<circle
-										cx="57"
-										cy="74"
-										r="5"
-										class="animate-pulse fill-[var(--accent)] motion-reduce:animate-none"
-									/>
-									<circle cx="270" cy="171" r="3.5" class="fill-[var(--accent)] opacity-70" />
-								</svg>
-							</div>
-
 							<h1
 								id="screen-title"
 								class="mt-3 max-w-[340px] text-center text-[32px] leading-[1.06] font-bold tracking-[-0.055em] sm:text-[36px]"
@@ -624,3 +577,37 @@
 		</div>
 	</div>
 </main>
+
+<style>
+	.hero-orbit,
+	.hero-ball {
+		transform-box: fill-box;
+		transform-origin: center;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.hero-orbit {
+			animation: onracha-hero-orbit 34s linear infinite;
+		}
+
+		.hero-ball {
+			animation: onracha-hero-ball-float 4.8s ease-in-out infinite;
+		}
+	}
+
+	@keyframes onracha-hero-orbit {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@keyframes onracha-hero-ball-float {
+		0%,
+		100% {
+			transform: translateY(0) rotate(-1deg);
+		}
+		50% {
+			transform: translateY(-3px) rotate(1deg);
+		}
+	}
+</style>
