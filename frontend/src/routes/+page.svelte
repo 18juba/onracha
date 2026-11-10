@@ -5,7 +5,6 @@
 	import {
 		ArrowLeft,
 		ArrowRight,
-		Check,
 		Eye,
 		EyeOff,
 		LoaderCircle,
@@ -15,6 +14,7 @@
 		Sun,
 		UserRound
 	} from '@lucide/svelte';
+	import MainApp from '../lib/components/MainApp.svelte';
 	import { api, type User } from '../lib/api';
 	import { getUserFacingErrorMessage } from '../lib/errors';
 	import { getChoiceScreen, passwordsMatch, type OnboardingScreen } from '../lib/onboarding';
@@ -138,10 +138,13 @@
 </script>
 
 <svelte:head>
-	<title>ONRACHA — entrar ou criar conta</title>
+	<title>{screen === 'success' ? 'ONRACHA — Buscar' : 'ONRACHA — entrar ou criar conta'}</title>
 	<meta name="description" content="Entre no ONRACHA para jogar junto." />
 </svelte:head>
 
+{#if screen === 'success'}
+	<MainApp user={currentUser} />
+{:else}
 <main
 	class="grid min-h-svh w-full place-items-center bg-[var(--page-outside)] px-0 py-0 sm:px-6 sm:py-6"
 >
@@ -150,7 +153,7 @@
 	>
 		<header class="relative z-10 grid h-11 grid-cols-[44px_1fr_44px] items-center">
 			<div class="grid size-11 place-items-center">
-				{#if screen !== 'welcome' && screen !== 'success'}
+				{#if screen !== 'welcome'}
 					<button
 						class="grid size-11 place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-primary)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
 						aria-label="Voltar"
@@ -202,7 +205,7 @@
 		<div class={`relative z-10 flex flex-1 flex-col ${screen === 'welcome' ? '' : 'pt-8'}`}>
 			{#key screen}
 				<section
-					class={`flex flex-1 flex-col ${screen === 'welcome' ? 'justify-between pb-2' : ''} ${screen === 'success' ? 'items-center justify-center text-center' : ''}`}
+					class={`flex flex-1 flex-col ${screen === 'welcome' ? 'justify-between pb-2' : ''}`}
 					aria-labelledby="screen-title"
 					aria-live="polite"
 					in:fly={{
@@ -584,25 +587,10 @@
 								{/if}
 							</button>
 						</form>
-					{:else}
-						<div class="flex flex-col items-center">
-							<div
-								class="mb-7 grid size-[84px] place-items-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--success)]"
-								aria-hidden="true"
-							>
-								<Check size={38} strokeWidth={2.5} />
-							</div>
-							<h1
-								id="screen-title"
-								class="text-[32px] leading-tight font-bold tracking-[-0.055em] sm:text-[36px]"
-							>
-								{currentUser ? `Tudo certo, ${currentUser.name.split(' ')[0]}!` : 'Tudo certo!'}
-							</h1>
-							<p class="mt-3 text-sm text-[var(--text-secondary)]">{currentUser?.email}</p>
-						</div>
 					{/if}
 				</section>
 			{/key}
 		</div>
 	</div>
 </main>
+{/if}
