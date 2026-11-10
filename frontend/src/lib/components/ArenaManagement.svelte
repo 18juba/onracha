@@ -9,6 +9,7 @@
 		ImagePlus,
 		LoaderCircle,
 		MapPin,
+		Pencil,
 		Plus,
 		X
 	} from '@lucide/svelte';
@@ -68,6 +69,8 @@
 	let loadError = $state('');
 	let formError = $state('');
 	let successMessage = $state('');
+	let editingArena = $state<Arena | null>(null);
+	let arenaActive = $state(true);
 	let name = $state('');
 	let arenaType = $state('society');
 	let address = $state('');
@@ -76,6 +79,7 @@
 	let selectedLocation = $state<Coordinates | null>(null);
 	let selectedPhoto = $state<File | null>(null);
 	let photoPreview = $state('');
+	let currentArenaPhotoURL = $state<string | null>(null);
 	let photoError = $state('');
 	let photoInputKey = $state(0);
 	let pendingPhotoArena = $state<Arena | null>(null);
@@ -102,6 +106,26 @@
 	}
 
 	function startCreation() {
+		resetForm();
+		formError = '';
+		successMessage = '';
+		screen = 'details';
+	}
+
+	function startEditing(arena: Arena) {
+		resetForm();
+		editingArena = arena;
+		arenaActive = arena.active;
+		name = arena.name;
+		arenaType = arena.arena_type;
+		address = arena.address;
+		city = arena.city;
+		stateCode = arena.state;
+		selectedLocation =
+			arena.latitude !== null && arena.longitude !== null
+				? { latitude: arena.latitude, longitude: arena.longitude }
+				: null;
+		currentArenaPhotoURL = arena.photo_url;
 		formError = '';
 		successMessage = '';
 		screen = 'details';
@@ -152,20 +176,25 @@
 	}
 
 	function resetForm() {
+		editingArena = null;
+		arenaActive = true;
 		name = '';
 		arenaType = 'society';
 		address = '';
 		city = '';
 		stateCode = '';
 		selectedLocation = null;
+		currentArenaPhotoURL = null;
 		formError = '';
 		photoError = '';
 		clearPhoto();
+		pendingPhotoArena = null;
 	}
 
-	async function createArena() {
+	async function saveArena() {
 		const location = selectedLocation;
-		if ((!location && !pendingPhotoArena) || isSaving) return;
+		const arenaBeingEdited = editingArena;
+		if ((!arenaBeingEdited && !location && !pendingPhotoArena) || isSaving) return;
 
 		isSaving = true;
 		formError = '';
@@ -184,53 +213,90 @@
 
 				arenas = arenas.map((arena) => (arena.id === arenaWithPhoto.id ? arenaWithPhoto : arena));
 				pendingPhotoArena = null;
-				successMessage = 'Arena cadastrada com foto.';
+				successMessage = arenaBeingEdited
+					? 'Alterações salvas com foto.'
+					: 'Arena cadastrada com foto.';
 				resetForm();
 				screen = 'list';
 				return;
 			}
 
-			if (!location) return;
-
-			const createdArena = await api.createArena({
-				name: name.trim(),
-				arena_type: arenaType,
-				address: address.trim(),
-				city: city.trim(),
-				state: stateCode.trim().toUpperCase(),
-				latitude: location.latitude,
-				longitude: location.longitude
-			});
+			let savedArena: Arena;
+			if (arenaBeingEdited) {
+				savedArena = await api.updateArena(arenaBeingEdited.id, {
+					name: name.trim(),
+					arena_type: arenaType,
+					address: address.trim(),
+					city: city.trim(),
+					state: stateCode.trim().toUpperCase(),
+					latitude: location?.latitude ?? null,
+					longitude: location?.longitude ?? null,
+					active: arenaActive
+				});
+			} else {
+				if (!location) return;
+				savedArena = await api.createArena({
+					name: name.trim(),
+					arena_type: arenaType,
+					address: address.trim(),
+					city: city.trim(),
+					state: stateCode.trim().toUpperCase(),
+					latitude: location.latitude,
+					longitude: location.longitude
+				});
+			}
 
 			if (selectedPhoto) {
 				try {
-					const arenaWithPhoto = await api.replaceArenaPhoto(createdArena.id, selectedPhoto);
-					arenas = [arenaWithPhoto, ...arenas];
+					savedArena = await api.replaceArenaPhoto(savedArena.id, selectedPhoto);
 				} catch (error) {
-					arenas = [createdArena, ...arenas];
-					pendingPhotoArena = createdArena;
-					formError = `A arena foi cadastrada, mas a foto não foi enviada. ${getUserFacingErrorMessage(error, 'Tente novamente.')}`;
+					upsertArena(savedArena);
+					pendingPhotoArena = savedArena;
+					formError = `Os dados foram salvos, mas a foto não foi enviada. ${getUserFacingErrorMessage(error, 'Tente novamente.')}`;
 					return;
 				}
-			} else {
-				arenas = [createdArena, ...arenas];
 			}
 
-			successMessage = selectedPhoto ? 'Arena cadastrada com foto.' : 'Arena cadastrada.';
+			upsertArena(savedArena);
+			successMessage = arenaBeingEdited
+				? selectedPhoto
+					? 'Alterações salvas com foto.'
+					: 'Alterações salvas.'
+				: selectedPhoto
+					? 'Arena cadastrada com foto.'
+					: 'Arena cadastrada.';
 			resetForm();
 			screen = 'list';
 		} catch (error) {
-			formError = getUserFacingErrorMessage(error, 'Não foi possível cadastrar a arena.');
+			formError = getUserFacingErrorMessage(
+				error,
+				arenaBeingEdited
+					? 'Não foi possível salvar as alterações.'
+					: 'Não foi possível cadastrar a arena.'
+			);
 		} finally {
 			isSaving = false;
 		}
+	}
+
+	function upsertArena(arena: Arena) {
+		if (arenas.some((existingArena) => existingArena.id === arena.id)) {
+			arenas = arenas.map((existingArena) =>
+				existingArena.id === arena.id ? arena : existingArena
+			);
+			return;
+		}
+
+		arenas = [arena, ...arenas];
 	}
 
 	function finishWithoutPhoto() {
 		if (!pendingPhotoArena) return;
 
 		pendingPhotoArena = null;
-		successMessage = 'Arena cadastrada sem foto.';
+		successMessage = editingArena
+			? 'Alterações salvas. A foto anterior foi mantida.'
+			: 'Arena cadastrada sem foto.';
 		resetForm();
 		screen = 'list';
 	}
@@ -241,6 +307,7 @@
 			return;
 		}
 
+		resetForm();
 		screen = 'list';
 	}
 </script>
@@ -356,30 +423,44 @@
 					<article
 						class="overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)]"
 					>
-						<div class="relative aspect-[1.25] overflow-hidden bg-[var(--surface-raised)]">
-							<div class="absolute inset-0 grid place-items-center text-[var(--accent)]">
-								<Building2 size={34} strokeWidth={1.5} aria-hidden="true" />
+						<button
+							class="block w-full text-left transition-colors hover:bg-[var(--surface-raised)] focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none focus-visible:ring-inset"
+							type="button"
+							aria-label={`Editar arena ${arena.name}`}
+							onclick={() => startEditing(arena)}
+						>
+							<div class="relative aspect-[1.25] overflow-hidden bg-[var(--surface-raised)]">
+								<div class="absolute inset-0 grid place-items-center text-[var(--accent)]">
+									<Building2 size={34} strokeWidth={1.5} aria-hidden="true" />
+								</div>
+								{#if arena.photo_url}
+									<img
+										src={arena.photo_url}
+										alt=""
+										class="absolute inset-0 size-full object-cover"
+										onerror={(event) => event.currentTarget.remove()}
+									/>
+								{/if}
+								<span
+									class={`absolute top-2 right-2 rounded-full px-2.5 py-1 text-[10px] font-semibold ${arena.active ? 'bg-[var(--app-background)] text-[var(--accent)]' : 'bg-black/70 text-white'}`}
+								>
+									{arena.active ? 'Ativa' : 'Fechada'}
+								</span>
 							</div>
-							{#if arena.photo_url}
-								<img
-									src={arena.photo_url}
-									alt={arena.name}
-									class="absolute inset-0 size-full object-cover"
-									onerror={(event) => event.currentTarget.remove()}
-								/>
-							{/if}
-							<span
-								class={`absolute top-2 right-2 rounded-full px-2.5 py-1 text-[10px] font-semibold ${arena.active ? 'bg-[var(--app-background)] text-[var(--accent)]' : 'bg-black/70 text-white'}`}
-							>
-								{arena.active ? 'Ativa' : 'Fechada'}
-							</span>
-						</div>
-						<div class="p-3">
-							<h2 class="truncate text-sm font-semibold">{arena.name}</h2>
-							<p class="mt-1 truncate text-xs text-[var(--text-secondary)]">
-								{arena.city}, {arena.state}
-							</p>
-						</div>
+							<div class="p-3">
+								<div class="flex items-center gap-2">
+									<h2 class="min-w-0 flex-1 truncate text-sm font-semibold">{arena.name}</h2>
+									<Pencil
+										size={14}
+										class="shrink-0 text-[var(--text-secondary)]"
+										aria-hidden="true"
+									/>
+								</div>
+								<p class="mt-1 truncate text-xs text-[var(--text-secondary)]">
+									{arena.city}, {arena.state}
+								</p>
+							</div>
+						</button>
 					</article>
 				{/each}
 			</div>
@@ -395,14 +476,18 @@
 				type="button"
 				aria-label={pendingPhotoArena
 					? 'Concluir sem foto e voltar para arenas'
-					: 'Voltar para arenas'}
+					: editingArena
+						? 'Cancelar edição'
+						: 'Voltar para arenas'}
 				onclick={backToArenaList}
 			>
 				<ArrowLeft size={21} aria-hidden="true" />
 			</button>
 			<div>
-				<h1 class="text-lg font-semibold">Nova arena</h1>
-				<p class="text-xs text-[var(--text-secondary)]">1 de 2 · Dados do espaço</p>
+				<h1 class="text-lg font-semibold">{editingArena ? 'Editar arena' : 'Nova arena'}</h1>
+				<p class="text-xs text-[var(--text-secondary)]">
+					{editingArena ? 'Dados da arena' : '1 de 2 · Dados do espaço'}
+				</p>
 			</div>
 		</header>
 
@@ -449,10 +534,10 @@
 						<div
 							class="grid size-20 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--surface-raised)] text-[var(--accent)]"
 						>
-							{#if photoPreview}
+							{#if photoPreview || currentArenaPhotoURL}
 								<img
-									src={photoPreview}
-									alt="Pré-visualização da foto da arena"
+									src={photoPreview || currentArenaPhotoURL || ''}
+									alt={photoPreview ? 'Pré-visualização da foto da arena' : `Foto atual de ${name}`}
 									class="size-full object-cover"
 								/>
 							{:else}
@@ -472,7 +557,9 @@
 										onchange={selectPhoto}
 									/>
 								{/key}
-								<span>{selectedPhoto ? 'Trocar foto' : 'Adicionar foto'}</span>
+								<span
+									>{selectedPhoto || currentArenaPhotoURL ? 'Trocar foto' : 'Adicionar foto'}</span
+								>
 							</label>
 							{#if selectedPhoto}
 								<button
@@ -491,6 +578,24 @@
 						<p class="text-xs font-normal text-[var(--text-primary)]" role="alert">{photoError}</p>
 					{/if}
 				</div>
+
+				{#if editingArena}
+					<label
+						class="flex min-h-14 items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
+					>
+						<input
+							class="size-5 shrink-0 accent-[var(--accent)]"
+							type="checkbox"
+							bind:checked={arenaActive}
+						/>
+						<span class="grid gap-0.5">
+							<span class="text-sm font-medium">Arena em atividade</span>
+							<span class="text-xs font-normal text-[var(--text-secondary)]">
+								Aparece como disponível na busca
+							</span>
+						</span>
+					</label>
+				{/if}
 
 				<label class="grid gap-2 text-sm font-medium">
 					<span>Endereço</span>
@@ -550,7 +655,7 @@
 					class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
 					type="submit"
 				>
-					<span>Escolher local no mapa</span>
+					<span>{editingArena ? 'Continuar para o mapa' : 'Escolher local no mapa'}</span>
 					<ArrowRight size={19} aria-hidden="true" />
 				</button>
 			</div>
@@ -569,7 +674,15 @@
 			</button>
 			<div class="min-w-0 flex-1">
 				<h1 class="text-lg font-semibold">Local da arena</h1>
-				<p class="text-xs text-[var(--text-secondary)]">2 de 2 · Toque no mapa para marcar</p>
+				<p class="text-xs text-[var(--text-secondary)]">
+					{#if editingArena}
+						{selectedLocation
+							? 'Toque no mapa para ajustar o local'
+							: 'Local opcional · toque no mapa para marcar'}
+					{:else}
+						2 de 2 · Toque no mapa para marcar
+					{/if}
+				</p>
 			</div>
 			<span
 				class="grid size-9 place-items-center rounded-xl bg-[var(--surface)] text-[var(--accent)]"
@@ -601,14 +714,15 @@
 						{selectedLocation.latitude.toFixed(5)}, {selectedLocation.longitude.toFixed(5)}
 					</span>
 				</p>
+			{:else if editingArena}
+				<p class="mb-3 text-xs text-[var(--text-secondary)]">Nenhum local informado</p>
 			{/if}
 			<button
 				class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
 				type="button"
-				disabled={(!selectedLocation && !pendingPhotoArena) ||
-					(pendingPhotoArena !== null && !selectedPhoto) ||
-					isSaving}
-				onclick={createArena}
+				disabled={isSaving ||
+					(pendingPhotoArena ? !selectedPhoto : !editingArena && !selectedLocation)}
+				onclick={saveArena}
 			>
 				{#if isSaving}
 					<LoaderCircle
@@ -616,10 +730,16 @@
 						class="animate-spin motion-reduce:animate-none"
 						aria-hidden="true"
 					/>
-					<span>Cadastrando arena</span>
+					<span>{editingArena ? 'Salvando alterações' : 'Cadastrando arena'}</span>
 				{:else}
 					<Check size={19} aria-hidden="true" />
-					<span>{pendingPhotoArena ? 'Tentar enviar foto' : 'Cadastrar arena'}</span>
+					<span>
+						{pendingPhotoArena
+							? 'Tentar enviar foto'
+							: editingArena
+								? 'Salvar alterações'
+								: 'Cadastrar arena'}
+					</span>
 				{/if}
 			</button>
 			{#if pendingPhotoArena}

@@ -30,6 +30,12 @@ export type CreateArenaInput = {
 	longitude: number;
 };
 
+export type UpdateArenaInput = Omit<CreateArenaInput, 'latitude' | 'longitude'> & {
+	latitude: number | null;
+	longitude: number | null;
+	active: boolean;
+};
+
 export class ApiError extends Error {
 	constructor(
 		message: string,
@@ -112,6 +118,13 @@ export const api = {
 	createArena(input: CreateArenaInput): Promise<Arena> {
 		return request('/api/v1/arenas', {
 			method: 'POST',
+			body: JSON.stringify(input)
+		});
+	},
+
+	updateArena(arenaID: number, input: UpdateArenaInput): Promise<Arena> {
+		return request(`/api/v1/arenas/${arenaID}`, {
+			method: 'PUT',
 			body: JSON.stringify(input)
 		});
 	},
