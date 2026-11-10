@@ -149,7 +149,7 @@
 					size="sm"
 					role="option"
 					aria-selected={option.value === value}
-					tabindex="-1"
+					tabindex={-1}
 					onclick={() => choose(option)}
 					onpointerenter={() => (activeIndex = index)}
 					class={'w-full justify-start rounded-lg text-left text-sm transition-colors ' +

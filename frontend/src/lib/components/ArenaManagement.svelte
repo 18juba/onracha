@@ -544,7 +544,7 @@
 						name="name"
 						autocomplete="organization"
 						placeholder="Ex.: Arena Central"
-						maxlength="120"
+						maxlength={120}
 						bind:value={name}
 						required
 					/>
@@ -567,7 +567,7 @@
 						name="address"
 						autocomplete="street-address"
 						placeholder="Rua, número e bairro"
-						maxlength="255"
+						maxlength={255}
 						bind:value={address}
 						required
 					/>
@@ -580,7 +580,7 @@
 							name="city"
 							autocomplete="address-level2"
 							placeholder="Sua cidade"
-							maxlength="120"
+							maxlength={120}
 							bind:value={city}
 							required
 						/>
