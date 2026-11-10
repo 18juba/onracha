@@ -74,13 +74,54 @@ jobs:
           auth_coverage="$(go tool cover -func=/tmp/auth-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
           arena_coverage="$(go tool cover -func=/tmp/arena-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
           game_coverage="$(go tool cover -func=/tmp/game-coverage.out | awk '$1 == "total:" { gsub("%", "", $3); print $3 }')"
-          echo "Auth domain coverage: ${auth_coverage}% (minimum: 80%)"
-          echo "Arena domain coverage: ${arena_coverage}% (minimum: 80%)"
-          echo "Game domain coverage: ${game_coverage}% (minimum: 80%)"
+          echo "Auth domain coverage: $auth_coverage% (minimum: 80%)"
+          echo "Arena domain coverage: $arena_coverage% (minimum: 80%)"
+          echo "Game domain coverage: $game_coverage% (minimum: 80%)"
           awk -v auth="$auth_coverage" -v arena="$arena_coverage" -v game="$game_coverage" 'BEGIN { exit !(auth >= 80 && arena >= 80 && game >= 80) }'
 
       - name: Build
-        run: go build ./...
+        run: |
+          go build ./...
+          go build -o /tmp/onracha-api .
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '2.3.0'
+
+      - name: Smoke test organizer-to-player flow
+        env:
+          BASE_URL: http://127.0.0.1:8080
+          PHOTO_STORAGE_DIR: /tmp/onracha-smoke-uploads
+        run: |
+          set -euo pipefail
+          /tmp/onracha-api > /tmp/onracha-api.log 2>&1 &
+          api_pid=$!
+          cleanup() {
+            kill "$api_pid" 2>/dev/null || true
+            wait "$api_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          api_ready=false
+          for _ in $(seq 1 30); do
+            if curl --fail --silent "$BASE_URL/health" >/dev/null; then
+              api_ready=true
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/onracha-api.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$api_ready" != "true" ]; then
+            echo "API did not become ready within 30 seconds." >&2
+            cat /tmp/onracha-api.log
+            exit 1
+          fi
+
+          k6 run ../performance/smoke.js
 
   frontend:
     name: Frontend (SvelteKit)
@@ -111,3 +152,4 @@ jobs:
 
       - name: Build
         run: bun run build
+

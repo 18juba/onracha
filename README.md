@@ -44,6 +44,16 @@ docker compose down
 
 Os volumes `postgres_data` e `arena_photos` mantêm os dados e as fotos locais. `docker compose down -v` também apaga esses volumes.
 
+## Smoke test
+
+O smoke test com k6 percorre cadastro e login de duas contas, criação de arena e horário, agendamento, busca do jogo, participação e consulta a sala de jogo. Cada execução cria registros permanentes no banco configurado; rode manualmente apenas contra uma base de teste descartável.
+
+Com a API e as migrations disponíveis, execute:
+
+    k6 run performance/smoke.js
+
+O teste roda automaticamente no job de backend da CI, usando um PostgreSQL temporário do job. O k6 está fixado em 2.3.0 na workflow.
+
 ## Documentação
 
 - [Backend e testes](backend/README.md)
