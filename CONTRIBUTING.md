@@ -54,7 +54,7 @@ bun install --frozen-lockfile
 bun run check
 bun run lint
 bun run test:unit --run
-bun run build
+bun run --bun build
 ```
 
 Para mudanças em Svelte ou SvelteKit, siga também as instruções de `frontend/AGENTS.md`.

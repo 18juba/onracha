@@ -40,6 +40,6 @@ bun run test:unit --run
 ## Build de produção e preview local
 
 ```bash
-bun run build
+bun run --bun build
 bun run preview
 ```
