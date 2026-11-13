@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+**/.git
+**/.env
+**/.env.*
+**/node_modules
+**/.svelte-kit
+**/build
+backend/uploads

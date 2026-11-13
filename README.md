@@ -46,6 +46,14 @@ docker compose down
 
 Os volumes `postgres_data` e `arena_photos` mantêm os dados e as fotos locais. `docker compose down -v` também apaga esses volumes.
 
+## Deploy com Docker Compose em produção
+
+Copie `.env.example` para `.env.production`. Os valores padrão são apenas para desenvolvimento e não devem ser usados em produção.
+
+```bash
+docker compose --env-file .env.production -f compose.production.yaml up -d
+```
+
 ## Smoke test
 
 O smoke test com k6 percorre cadastro e login de duas contas, criação de arena e horário, agendamento, busca do jogo, participação e consulta a sala de jogo. Cada execução cria registros permanentes no banco configurado; rode manualmente apenas contra uma base de teste descartável.
